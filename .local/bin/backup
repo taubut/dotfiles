@@ -1,0 +1,38 @@
+#!/bin/bash
+# Quick Borg backup to Unraid
+
+REPO="/mnt/unraid-backup/borg-repo"
+BACKUP_NAME="{hostname}-{now:%Y-%m-%d_%H:%M}"
+
+# Get passphrase via KDE dialog
+export BORG_PASSPHRASE=$(kdialog --password "Enter Borg Backup Passphrase")
+
+# Exit if cancelled
+if [ -z "$BORG_PASSPHRASE" ]; then
+    kdialog --error "Backup cancelled"
+    exit 1
+fi
+
+# Show progress in a terminal
+ghostty -e bash -c "
+    echo '🔒 Starting backup to Unraid...'
+    echo ''
+    borg create --progress --stats --files-cache=mtime,size \\
+        $REPO::$BACKUP_NAME \\
+        $HOME \\
+        --exclude '$HOME/.cache' \\
+        --exclude '$HOME/.local/share/Steam' \\
+        --exclude '$HOME/.local/share/Trash' \\
+        --exclude '$HOME/.local/share/umu' \\
+        --exclude '$HOME/Downloads' \\
+        --exclude '*.tmp' \\
+        --exclude '.npm' \\
+        --exclude 'node_modules'
+    
+    echo ''
+    echo '✅ Backup complete!'
+    echo ''
+    read -p 'Press Enter to close...'
+"
+
+kdialog --passivepopup "Backup to Unraid complete!" 5

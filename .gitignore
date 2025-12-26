@@ -1,0 +1,10 @@
+# Sensitive files
+*.secret
+*password*
+*token*
+.env
+
+# Cache
+.cache/
+__pycache__/
+*.pyc

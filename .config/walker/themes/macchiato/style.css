@@ -1,0 +1,77 @@
+/* Catppuccin Macchiato for Walker */
+
+@define-color window_bg_color #1e2030;
+@define-color accent_bg_color #f0c6c6;
+@define-color theme_fg_color #cad3f5;
+
+/* Main window container */
+.box-wrapper {
+    background: @window_bg_color;
+    padding: 16px;
+    border-radius: 12px;
+    border: 3px solid @accent_bg_color;
+}
+
+/* All text */
+* {
+    color: @theme_fg_color;
+}
+
+/* Search entry */
+entry {
+    background: #363a4f;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+}
+
+/* List items - selection highlight */
+row:selected,
+row:focus,
+.child:selected,
+child:selected,
+listboxrow:selected,
+listboxrow:focus,
+.selected,
+.item:selected,
+.item:focus {
+    background: #f0c6c6;
+    border-radius: 6px;
+}
+
+row:selected *,
+row:focus *,
+.child:selected *,
+child:selected *,
+listboxrow:selected *,
+listboxrow:focus *,
+.item:selected *,
+.item:focus * {
+    color: #1e2030;
+}
+
+row:hover,
+.child:hover,
+child:hover,
+listboxrow:hover,
+.item:hover {
+    background: rgba(240, 198, 198, 0.3);
+    border-radius: 6px;
+}
+
+/* Subtitle text */
+.subtitle {
+    color: #a5adcb;
+}
+
+/* Activation labels */
+.activationlabel {
+    background: #363a4f;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+row:selected .activationlabel {
+    background: #1e2030;
+    color: @accent_bg_color;
+}

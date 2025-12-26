@@ -1,0 +1,4 @@
+#!/bin/bash
+# Catppuccin-themed fetch with custom logo (side by side)
+
+paste -d'  ' <(cat /home/taubut/Pictures/nzxt/catppuccin_logo.ans) <(fastfetch --logo none 2>/dev/null)
