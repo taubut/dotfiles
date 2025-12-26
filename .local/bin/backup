@@ -13,9 +13,13 @@ if [ -z "$BORG_PASSPHRASE" ]; then
     exit 1
 fi
 
+# Save package list for easy reinstall
+pacman -Qqe > ~/package-list.txt
+
 # Show progress in a terminal
 ghostty -e bash -c "
     echo '🔒 Starting backup to Unraid...'
+    echo '📦 Package list saved to ~/package-list.txt'
     echo ''
     borg create --progress --stats --files-cache=mtime,size \\
         $REPO::$BACKUP_NAME \\
