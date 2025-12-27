@@ -11,8 +11,7 @@ alias lt="eza --tree --icons --level=2"
 # bat alias (better cat)
 alias cat="bat --style=auto"
 
-# overwrite greeting
-# potentially disabling fastfetch
-#function fish_greeting
-#    # smth smth
-#end
+# overwrite greeting with neofetch cat
+function fish_greeting
+    neofetch
+end
