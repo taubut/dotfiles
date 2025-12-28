@@ -44,8 +44,8 @@ Image=file:///home/taubut/Pictures/nzxt/catppuccin_logo.svg
 SlidePaths=/usr/share/wallpapers/
 
 [Containments][46]
-ItemGeometries-1440x2560=Applet-54:0,2032,352,512,0;
-ItemGeometriesVertical=Applet-54:0,2032,352,512,0;
+ItemGeometries-1440x2560=
+ItemGeometriesVertical=
 activityId=1e763955-a2ab-4a7b-8eca-a6d28d48c61a
 formfactor=0
 immutability=1
@@ -53,14 +53,6 @@ lastScreen=1
 location=0
 plugin=org.kde.plasma.folder
 wallpaperplugin=org.kde.image
-
-[Containments][46][Applets][54]
-immutability=1
-plugin=plasmusic-toolbar
-
-[Containments][46][Applets][54][Configuration][ConfigDialog]
-DialogHeight=630
-DialogWidth=810
 
 [Containments][46][ConfigDialog]
 DialogHeight=630
@@ -109,6 +101,9 @@ plugin=org.kde.plasma.pager
 [Containments][61][Applets][64]
 immutability=1
 plugin=org.kde.plasma.icontasks
+
+[Containments][61][Applets][64][Configuration][General]
+launchers=applications:systemsettings.desktop,preferred://filemanager,applications:zen.desktop,applications:youtube-music-desktop-app.desktop
 
 [Containments][61][Applets][65]
 immutability=1
@@ -183,6 +178,9 @@ plugin=org.kde.plasma.battery
 [Containments][85][Applets][90][Applets][105]
 immutability=1
 plugin=org.kde.plasma.mediacontroller
+
+[Containments][85][Applets][90][Applets][105][Configuration]
+PreloadWeight=18
 
 [Containments][85][Applets][90][Applets][106]
 immutability=1
