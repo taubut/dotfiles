@@ -26,6 +26,7 @@
 - **Panel Colorizer** - Translucent panel with custom opacity
 - **Papirus Icons** - With Catppuccin Macchiato Flamingo folder colors
 - **Cursor** - Catppuccin Macchiato Flamingo
+- **Window Decoration** - ActiveAccentFrame (no titlebar, 1px flamingo border)
 
 ### Browsers & Apps
 - **Zen Browser** - userChrome.css with Catppuccin Macchiato Flamingo, 90% opacity
