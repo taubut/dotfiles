@@ -22,7 +22,7 @@
 ### Desktop Environment (KDE Plasma)
 - **SDDM** - Login screen with Catppuccin Macchiato Flamingo theme
 - **Conky** - System monitor widget with weather, now playing, system stats
-- **Walker** - App launcher with Catppuccin Macchiato Flamingo theme (Super+Space)
+- **Vicinae** - Raycast-style launcher with Catppuccin Macchiato Flamingo theme (Meta+Space)
 - **Panel Colorizer** - Translucent panel with custom opacity
 - **Papirus Icons** - With Catppuccin Macchiato Flamingo folder colors
 - **Cursor** - Catppuccin Macchiato Flamingo
@@ -81,7 +81,8 @@
 - ~/.config/starship.toml
 - ~/.config/cava/config
 - ~/.config/btop/btop.conf
-- ~/.config/walker/
+- ~/.config/vicinae/settings.json
+- ~/.local/share/vicinae/themes/catppuccin-macchiato-flamingo.toml
 - ~/.config/conky/conky.conf
 - ~/.config/neofetch/config.conf
 - ~/.config/fastfetch/config.jsonc
