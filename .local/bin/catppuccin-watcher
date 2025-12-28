@@ -58,9 +58,9 @@ process_file() {
     case "$MIME" in
         image/*)
             # It's an image - use catppuccinifier
-            OUTPUT="$PICTURE_OUTPUT/${NAME}_catppuccin.${EXT}"
-            catppuccinifier "$FILE" --flavor macchiato -o "$OUTPUT"
-            echo "Created: $OUTPUT"
+            # Uses --dir for output directory, auto-names with flavor suffix
+            catppuccinifier "$FILE" --flavor macchiato --dir "$PICTURE_OUTPUT"
+            echo "Created in: $PICTURE_OUTPUT"
             ;;
         video/*)
             # It's a video - use ffmpeg with our LUT

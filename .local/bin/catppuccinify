@@ -24,7 +24,8 @@ MIME=$(file --mime-type -b "$INPUT")
 case "$MIME" in
     image/*)
         echo "Image detected, using catppuccinifier..."
-        catppuccinifier "$INPUT" --flavor macchiato -o "$OUTPUT"
+        OUTDIR=$(dirname "$OUTPUT")
+        catppuccinifier "$INPUT" --flavor macchiato --dir "$OUTDIR"
         ;;
     video/*)
         echo "Video detected, using lutgen + ffmpeg..."
