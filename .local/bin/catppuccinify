@@ -1,0 +1,46 @@
+#!/bin/bash
+# Catppuccinify any image or video
+# Usage: catppuccinify <file>
+
+if [ -z "$1" ]; then
+    echo "Usage: catppuccinify <file>"
+    exit 1
+fi
+
+INPUT="$1"
+FILENAME="${INPUT%.*}"
+EXT="${INPUT##*.}"
+OUTPUT="${FILENAME}_catppuccin.${EXT}"
+
+# Check if file exists
+if [ ! -f "$INPUT" ]; then
+    echo "Error: File not found: $INPUT"
+    exit 1
+fi
+
+# Get mime type
+MIME=$(file --mime-type -b "$INPUT")
+
+case "$MIME" in
+    image/*)
+        echo "Image detected, using catppuccinifier..."
+        catppuccinifier "$INPUT" --flavor macchiato -o "$OUTPUT"
+        ;;
+    video/*)
+        echo "Video detected, using lutgen + ffmpeg..."
+        # Generate LUT if not exists
+        LUT_FILE="$HOME/.local/share/lutgen/macchiato_lut.png"
+        if [ ! -f "$LUT_FILE" ]; then
+            echo "Generating Catppuccin Macchiato LUT..."
+            mkdir -p "$HOME/.local/share/lutgen"
+            lutgen generate -p catppuccin-macchiato -o "$LUT_FILE"
+        fi
+        ffmpeg -i "$INPUT" -i "$LUT_FILE" -filter_complex '[0][1] haldclut' -y "$OUTPUT"
+        ;;
+    *)
+        echo "Error: Unsupported file type: $MIME"
+        exit 1
+        ;;
+esac
+
+echo "Done! Output: $OUTPUT"
