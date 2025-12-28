@@ -1,0 +1,68 @@
+[70929a01-aca4-4c19-a422-29c295cd59e2]
+Description=Zen Browser Opacity
+opacityactiverule=2
+opacityinactive=90
+opacityinactiverule=2
+wmclass=zen
+wmclassmatch=2
+
+[General]
+count=4
+rules=ca55a419-d431-43e0-a3d3-83367789c56c,fe7c0f77-24c4-41f5-898d-169a129a277a,70929a01-aca4-4c19-a422-29c295cd59e2,cava-widget-rule
+
+[YouTube Music Desktop]
+Description=YouTube Music Desktop Opacity
+opacity=90
+opacityactive=90
+opacityactiveforce=true
+opacityforce=true
+opacityinactive=85
+opacityinactiveforce=true
+wmclass=youtube music desktop app
+wmclassmatch=1
+
+[ca55a419-d431-43e0-a3d3-83367789c56c]
+Description=Window settings for com.mitchellh.ghostty
+opacityactive=90
+opacityactiverule=2
+opacityinactive=73
+opacityinactiverule=2
+title=~ - fish
+types=1
+wmclass=ghostty com.mitchellh.ghostty
+wmclasscomplete=true
+wmclassmatch=1
+
+[cava-widget-rule]
+Description=Cava Widget
+below=true
+belowrule=2
+noborder=true
+noborderrule=2
+position=3200,2150
+positionrule=2
+size=1000,400
+sizerule=2
+skippager=true
+skippagerrule=2
+skipswitcher=true
+skipswitcherrule=2
+title=cava
+titlematch=1
+wmclass=cava
+wmclasscomplete=false
+
+[fe7c0f77-24c4-41f5-898d-169a129a277a]
+Description=Window settings for YouTube Music Desktop App
+clientmachine=localhost
+opacityactive=90
+opacityactiverule=2
+opacityinactive=80
+opacityinactiverule=2
+title=YouTube Music Desktop App
+types=1
+windowrole=browser-window
+windowrolematch=1
+wmclass=youtube music desktop app YouTube Music Desktop App
+wmclasscomplete=true
+wmclassmatch=1

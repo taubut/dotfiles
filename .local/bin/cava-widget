@@ -1,0 +1,3 @@
+#!/bin/bash
+# Launch cava in SDL mode (standalone window)
+cava

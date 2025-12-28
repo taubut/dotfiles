@@ -1,8 +1,13 @@
 [general]
 framerate = 60
-bars = 0
-bar_width = 2
-bar_spacing = 1
+bars = 50
+bar_width = 12
+bar_spacing = 4
+
+[output]
+method = sdl
+sdl_width = 1000
+sdl_height = 400
 
 [color]
 background = '#24273a'
