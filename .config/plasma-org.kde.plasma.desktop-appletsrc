@@ -24,7 +24,7 @@ immutability=1
 lastScreen=0
 location=0
 plugin=org.kde.plasma.folder
-wallpaperplugin=org.kde.image
+wallpaperplugin=luisbocanegra.smart.video.wallpaper.reborn
 
 [Containments][45][ConfigDialog]
 DialogHeight=823
@@ -39,7 +39,7 @@ WallpaperWorkShopId=1168169793
 [Containments][45][Wallpaper][luisbocanegra.smart.video.wallpaper.reborn][General]
 LastVideo=file:///home/taubut/Videos/winter-street.3840x2160.mp4
 LastVideoPosition=10133
-VideoUrls=[{"filename":"file:///home/taubut/Videos/winter-street.3840x2160.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Videos/iQrXob256WDQ4QY_Lonely Cat Chill Live Wallpaper_5_170058.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Downloads/1761909407.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Downloads/3163534-uhd_3840_2160_30fps.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Downloads/color-smoke.3840x2160.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Downloads/starry-sunset.3840x2160.mp4","enabled":true,"duration":0,"customDuration":0,"playbackRate":0,"loop":false}]
+VideoUrls=[{"filename":"file:///home/taubut/Videos/Wallpapers/starry-sunset.3840x2160.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Videos/Wallpapers/starry-sunset.3840x2160_catppuccin.mp4","enabled":true,"duration":0,"customDuration":0,"playbackRate":0,"loop":false}]
 
 [Containments][45][Wallpaper][org.kde.image][General]
 Image=file:///home/taubut/Pictures/Wallpapers/aurora-macchiato.webp
@@ -54,7 +54,7 @@ immutability=1
 lastScreen=1
 location=0
 plugin=org.kde.plasma.folder
-wallpaperplugin=org.kde.image
+wallpaperplugin=luisbocanegra.smart.video.wallpaper.reborn
 
 [Containments][46][ConfigDialog]
 DialogHeight=630
@@ -66,7 +66,7 @@ WallpaperSource[$e]=file:$HOME/.local/share/Steam/steamapps/workshop/content/431
 WallpaperWorkShopId=1616606982
 
 [Containments][46][Wallpaper][luisbocanegra.smart.video.wallpaper.reborn][General]
-VideoUrls=[{"filename":"file:///home/taubut/Videos/winter-street.3840x2160.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Downloads/1761909407.mp4","enabled":false,"duration":0,"customDuration":0,"playbackRate":0,"loop":false},{"filename":"file:///home/taubut/Videos/iQrXob256WDQ4QY_Lonely Cat Chill Live Wallpaper_5_170058.mp4","enabled":true,"duration":0,"customDuration":0,"playbackRate":0,"loop":false}]
+VideoUrls=[{"filename":"file:///home/taubut/Videos/Wallpapers/iQrXob256WDQ4QY_Lonely Cat Chill Live Wallpaper_5_170058_catppuccin.mp4","enabled":true,"duration":0,"customDuration":0,"playbackRate":0,"loop":false}]
 
 [Containments][46][Wallpaper][org.kde.image][General]
 Image=file:///home/taubut/Pictures/Wallpapers/1014616-macchiato.png

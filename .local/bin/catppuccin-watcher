@@ -1,0 +1,98 @@
+#!/bin/bash
+# =============================================================================
+# Catppuccin Watcher - Auto-converts wallpapers to Catppuccin theme
+# =============================================================================
+# This script watches two folders for new images/videos and automatically
+# converts them using catppuccinifier (images) or lutgen+ffmpeg (videos).
+# Converted files are saved to a "Catppuccin" subfolder.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION - Define the folders to watch and where to save output
+# -----------------------------------------------------------------------------
+PICTURE_WATCH="$HOME/Pictures/Wallpapers"          # Folder to watch for images
+PICTURE_OUTPUT="$HOME/Pictures/Wallpapers/Catppuccin"  # Where converted images go
+VIDEO_WATCH="$HOME/Videos/Wallpapers"              # Folder to watch for videos
+VIDEO_OUTPUT="$HOME/Videos/Wallpapers/Catppuccin"  # Where converted videos go
+
+# -----------------------------------------------------------------------------
+# SETUP - Create output folders if they don't exist
+# -----------------------------------------------------------------------------
+mkdir -p "$PICTURE_OUTPUT" "$VIDEO_OUTPUT"
+
+# -----------------------------------------------------------------------------
+# LUT SETUP - Generate the color lookup table for video conversion
+# -----------------------------------------------------------------------------
+# The LUT (Look Up Table) is used by ffmpeg to remap colors in videos
+# We only generate it once and reuse it for all video conversions
+LUT_FILE="$HOME/.local/share/lutgen/macchiato_lut.png"
+
+if [ ! -f "$LUT_FILE" ]; then
+    echo "Generating Catppuccin Macchiato LUT..."
+    mkdir -p "$HOME/.local/share/lutgen"
+    lutgen generate -p catppuccin-macchiato -o "$LUT_FILE"
+fi
+
+# -----------------------------------------------------------------------------
+# PROCESS_FILE FUNCTION - Handles the actual conversion of a single file
+# -----------------------------------------------------------------------------
+# Arguments:
+#   $1 = Full path to the file to process
+# -----------------------------------------------------------------------------
+process_file() {
+    local FILE="$1"                        # The full path to the file
+    local FILENAME=$(basename "$FILE")     # Just the filename (e.g., "sunset.png")
+    local NAME="${FILENAME%.*}"            # Filename without extension (e.g., "sunset")
+    local EXT="${FILENAME##*.}"            # Just the extension (e.g., "png")
+    local MIME=$(file --mime-type -b "$FILE")  # Get file type (e.g., "image/png")
+
+    # Skip files that are already in the Catppuccin folder or already converted
+    # This prevents infinite loops and re-processing
+    if [[ "$FILE" == *"/Catppuccin/"* ]] || [[ "$NAME" == *"_catppuccin"* ]]; then
+        return  # Exit the function early, do nothing
+    fi
+
+    echo "Processing: $FILE"
+
+    # Decide how to process based on file type
+    case "$MIME" in
+        image/*)
+            # It's an image - use catppuccinifier
+            OUTPUT="$PICTURE_OUTPUT/${NAME}_catppuccin.${EXT}"
+            catppuccinifier "$FILE" --flavor macchiato -o "$OUTPUT"
+            echo "Created: $OUTPUT"
+            ;;
+        video/*)
+            # It's a video - use ffmpeg with our LUT
+            # The haldclut filter applies the color transformation
+            OUTPUT="$VIDEO_OUTPUT/${NAME}_catppuccin.${EXT}"
+            ffmpeg -i "$FILE" -i "$LUT_FILE" -filter_complex '[0][1] haldclut' -y "$OUTPUT" 2>/dev/null
+            echo "Created: $OUTPUT"
+            ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
+# MAIN WATCHER LOOP - Monitor folders for new files
+# -----------------------------------------------------------------------------
+echo "Watching for new files..."
+echo "  Pictures: $PICTURE_WATCH"
+echo "  Videos: $VIDEO_WATCH"
+
+# inotifywait monitors the filesystem for events:
+#   -m              = Keep monitoring (don't exit after first event)
+#   -e close_write  = Trigger when a file is finished being written
+#   -e moved_to     = Trigger when a file is moved into the folder
+#   --format '%w%f' = Output the full path of the file
+#
+# The output is piped to a while loop that processes each file
+inotifywait -m -e close_write -e moved_to --format '%w%f' \
+    "$PICTURE_WATCH" "$VIDEO_WATCH" 2>/dev/null | while read FILE; do
+
+    # Small delay to ensure the file is fully written to disk
+    # (some programs write in chunks)
+    sleep 1
+
+    # Process the file
+    process_file "$FILE"
+done
