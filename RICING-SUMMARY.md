@@ -43,9 +43,10 @@
 
 ### Autostart
 - Conky system monitor
-- Elephant backend (for Walker)
+- Vicinae launcher (systemd user service)
 - cava-widget - Audio visualizer
 - rmpc-widget - Music player
+- mpd-mpris - MPRIS bridge for MPD
 - Ghostty terminal (--class=ghostty-main)
 
 ### KWin Scripts & Plugins
@@ -59,6 +60,35 @@
   - Saves package list before backup
   - Opens in Ghostty with kdialog passphrase prompt
 
+#### Restoring from Borg Backup
+
+1. **Mount Unraid share:**
+   ```bash
+   sudo mkdir -p /mnt/unraid-backup
+   sudo mount -t cifs //192.168.1.185/BubMachine /mnt/unraid-backup -o username=YOUR_USER
+   ```
+
+2. **List available backups:**
+   ```bash
+   borg list /mnt/unraid-backup/borg-repo
+   ```
+
+3. **Restore entire home directory:**
+   ```bash
+   cd /
+   borg extract /mnt/unraid-backup/borg-repo::ARCHIVE_NAME
+   ```
+
+4. **Restore specific files/folders:**
+   ```bash
+   borg extract /mnt/unraid-backup/borg-repo::ARCHIVE_NAME home/taubut/.config/ghostty
+   ```
+
+5. **Reinstall packages from saved list:**
+   ```bash
+   paru -S --needed - < ~/package-list.txt
+   ```
+
 ### Dotfiles
 - **Repository:** GitHub (private)
 - **Auto-sync:** Daily via systemd timer
@@ -68,11 +98,13 @@
   - starship
   - cava
   - btop
-  - walker
+  - vicinae
   - conky
   - neofetch
   - fastfetch
-  - Custom scripts (catfetch, backup)
+  - rmpc / mpd
+  - ActiveAccentFrame window decoration
+  - Custom scripts (catfetch, backup, cava-widget, rmpc-widget)
 
 ## File Locations
 
@@ -103,7 +135,7 @@
 - ~/Pictures/nzxt/catppuccin_logo.svg - Custom Catppuccin logo
 
 ## Keyboard Shortcuts
-- **Super + Space** - Walker launcher
+- **Meta + Space** - Vicinae launcher
 - **Super + Left Click Drag** - Move window
 - **Super + Right Click Drag** - Resize window
 
@@ -126,6 +158,9 @@
 - rmpc
 - mpd-mpris
 - plasma6-applets-panel-colorizer
+- vicinae-bin
+- klassy
+- catppuccinifier-bin
 
 ## Future Enhancements (To Check Out Later)
 
