@@ -23,6 +23,7 @@
 - **SDDM** - Login screen with Catppuccin Macchiato Flamingo theme
 - **Conky** - System monitor widget with weather, now playing, system stats
 - **Walker** - App launcher with Catppuccin Macchiato Flamingo theme (Super+Space)
+- **Panel Colorizer** - Translucent panel with custom opacity
 - **Papirus Icons** - With Catppuccin Macchiato Flamingo folder colors
 - **Cursor** - Catppuccin Macchiato Flamingo
 
@@ -121,6 +122,8 @@
 - plasma6-wallpapers-smart-video-wallpaper-reborn
 - mpd
 - rmpc
+- mpd-mpris
+- plasma6-applets-panel-colorizer
 
 ## Future Enhancements (To Check Out Later)
 

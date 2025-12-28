@@ -1,6 +1,6 @@
 [general]
 framerate = 60
-bars = 50
+bars = 40
 bar_width = 12
 bar_spacing = 4
 
