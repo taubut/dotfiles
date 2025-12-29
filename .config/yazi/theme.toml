@@ -1,0 +1,30 @@
+[flavor]
+use = "catppuccin-macchiato"
+
+# Override with flamingo accents
+[mgr]
+cwd = { fg = "#f0c6c6" }
+
+[tabs]
+active   = { fg = "#24273a", bg = "#f0c6c6", bold = true }
+inactive = { fg = "#f0c6c6", bg = "#363a4f" }
+
+[mode]
+normal_main = { fg = "#24273a", bg = "#f0c6c6", bold = true }
+normal_alt  = { fg = "#f0c6c6", bg = "#363a4f" }
+
+[filetype]
+rules = [
+    # Folders - flamingo!
+    { name = "*/", fg = "#f0c6c6" },
+    # Image
+    { mime = "image/*", fg = "#8bd5ca" },
+    # Media
+    { mime = "{audio,video}/*", fg = "#eed49f" },
+    # Archive
+    { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#f5bde6" },
+    # Document
+    { mime = "application/{pdf,doc,rtf}", fg = "#a6da95" },
+    # Fallback
+    { name = "*", fg = "#cad3f5" },
+]

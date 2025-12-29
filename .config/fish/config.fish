@@ -11,6 +11,15 @@ alias lt="eza --tree --icons --level=2"
 # bat alias (better cat)
 alias cat="bat --style=auto"
 
+# duf alias (better df)
+alias df="duf"
+
+# dust alias (better du)
+alias du="dust"
+
+# fd alias (better find)
+alias find="fd"
+
 # overwrite greeting with neofetch cat
 function fish_greeting
     neofetch
