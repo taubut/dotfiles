@@ -26,6 +26,9 @@ alias du="dust"
 # fd alias (better find)
 alias find="fd"
 
+# speedtest alias
+alias speedtest="speedtest++ --test-server stosat-ndhm-01.sys.comcast.net:8080,1774"
+
 # overwrite greeting with neofetch cat
 function fish_greeting
     neofetch
