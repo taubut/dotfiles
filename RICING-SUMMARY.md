@@ -4,6 +4,46 @@
 - **Color Scheme:** Catppuccin Macchiato
 - **Accent Color:** Flamingo (#f0c6c6)
 
+---
+
+## Quick Restore (New Machine)
+
+### From Dotfiles (Recommended)
+```bash
+# 1. Install CachyOS with KDE Plasma
+
+# 2. Clone dotfiles
+git clone https://github.com/taubut/dotfiles.git
+cd dotfiles
+
+# 3. Run restore script
+./restore.sh
+
+# 4. Reboot
+reboot
+```
+
+The restore script automatically:
+- Installs all packages from `package-list.txt`
+- Copies all config files to `~/.config/`
+- Copies scripts to `~/.local/bin/`
+- Copies themes (Vicinae, Aurorae window decorations)
+- Installs Yazi Catppuccin flavor
+- Generates lutgen LUT for video catppuccinification
+- Enables systemd services (Vicinae, catppuccin-watcher)
+
+### Post-Restore Steps
+1. Set your wallpaper
+2. Configure KDE panel (add widgets, set Panel Colorizer)
+3. Apply window rules in KDE System Settings
+4. Run `:adblock-update` in qutebrowser
+5. Log into apps (Zen Browser, Discord, etc.)
+
+### From Borg Backup (Full Restore)
+See "Restoring from Borg Backup" section below for complete home directory restoration.
+
+---
+
 ## Applications Themed
 
 ### Terminal & Shell
@@ -15,9 +55,15 @@
 
 ### CLI Tools
 - **btop** - System monitor with Catppuccin Macchiato theme
-- **cava** - Audio visualizer widget (SDL mode, borderless)
+- **cava** - Audio visualizer widget (SDL mode, borderless, flamingo gradient)
 - **rmpc** - TUI MPD client with Catppuccin Flamingo theme
 - **mpd** - Music Player Daemon for local music playback
+- **yazi** - Terminal file manager with Catppuccin Macchiato Flamingo theme
+- **eza** - Modern ls replacement with icons
+- **bat** - Cat replacement with syntax highlighting
+- **fd** - Modern find replacement
+- **duf** - Modern df replacement
+- **dust** - Modern du replacement
 
 ### Desktop Environment (KDE Plasma)
 - **SDDM** - Login screen with Catppuccin Macchiato Flamingo theme
@@ -30,6 +76,7 @@
 
 ### Browsers & Apps
 - **Zen Browser** - userChrome.css with Catppuccin Macchiato Flamingo, 90% opacity
+- **qutebrowser** - Vim-style browser with Catppuccin Macchiato theme, adblocking, SponsorBlock
 - **YouTube Music Desktop** - Catppuccin CSS theme with flamingo accent, 90% opacity
 - **VS Code** - Catppuccin theme with flamingo accent
 - **Discord** - Vencord with Catppuccin Flamingo (user configured)
@@ -48,6 +95,7 @@
 - rmpc-widget - Music player
 - mpd-mpris - MPRIS bridge for MPD
 - Ghostty terminal (--class=ghostty-main)
+- catppuccin-watcher - Auto-converts wallpapers to Catppuccin (systemd user service)
 
 ### KWin Scripts & Plugins
 - **Remember Window Positions** - Restores window positions on launch
@@ -90,21 +138,23 @@
    ```
 
 ### Dotfiles
-- **Repository:** GitHub (private)
-- **Auto-sync:** Daily via systemd timer
+- **Repository:** https://github.com/taubut/dotfiles (public)
+- **Auto-sync:** `~/.local/bin/dotfiles-sync` script
+- **Restore:** `./restore.sh` for new machine setup
 - **Configs included:**
-  - ghostty
-  - fish
-  - starship
-  - cava
-  - btop
-  - vicinae
-  - conky
-  - neofetch
-  - fastfetch
-  - rmpc / mpd
+  - ghostty, fish, starship
+  - cava, btop, conky
+  - vicinae, neofetch, fastfetch
+  - rmpc, mpd, yazi
+  - qutebrowser (with Catppuccin theme and greasemonkey scripts)
+  - KDE configs (plasma-appletsrc, kwinrulesrc)
   - ActiveAccentFrame window decoration
-  - Custom scripts (catfetch, backup, cava-widget, rmpc-widget)
+  - Vicinae Catppuccin Macchiato Flamingo theme
+- **Scripts included:**
+  - catfetch, backup
+  - cava-widget, rmpc-widget
+  - catppuccinify, catppuccin-watcher
+  - dotfiles-sync
 
 ## File Locations
 
@@ -122,6 +172,10 @@
 - ~/.config/rmpc/config.ron
 - ~/.config/rmpc/theme.ron
 - ~/.config/mpd/mpd.conf
+- ~/.config/yazi/theme.toml
+- ~/.config/qutebrowser/config.py
+- ~/.config/qutebrowser/catppuccin/ (theme module)
+- ~/.local/share/qutebrowser/greasemonkey/SponsorBlock.user.js
 
 ### Custom Scripts
 - ~/.local/bin/backup - Borg backup script
@@ -129,6 +183,12 @@
 - ~/.local/bin/dotfiles-sync - Auto-sync dotfiles to GitHub
 - ~/.local/bin/cava-widget - Launch cava in SDL mode
 - ~/.local/bin/rmpc-widget - Launch rmpc in Ghostty window
+- ~/.local/bin/catppuccinify - Convert images/videos to Catppuccin colors
+- ~/.local/bin/catppuccin-watcher - Auto-convert wallpapers dropped in ~/Pictures/Wallpapers
+
+### Systemd User Services
+- ~/.config/systemd/user/vicinae.service
+- ~/.config/systemd/user/catppuccin-watcher.service
 
 ### Themes & Assets
 - ~/Pictures/cat-ascii.txt - Custom cat ASCII for neofetch
@@ -142,8 +202,6 @@
 ## Packages Installed
 - ghostty
 - starship
-- eza
-- bat
 - cava
 - btop
 - conky
@@ -161,15 +219,36 @@
 - vicinae-bin
 - klassy
 - catppuccinifier-bin
+- lutgen (for video catppuccinification)
+- inotify-tools (for catppuccin-watcher)
+- qutebrowser
+- yazi
+- eza
+- bat
+- fd
+- duf
+- dust
+
+## Catppuccin Wallpaper Pipeline
+
+### Manual Conversion
+```bash
+# Convert single image
+catppuccinify ~/Pictures/wallpaper.jpg
+
+# Convert video
+catppuccinify ~/Videos/wallpaper.mp4
+```
+
+### Automatic Conversion
+Drop wallpapers into these folders and they'll auto-convert:
+- `~/Pictures/Wallpapers/` → `~/Pictures/Wallpapers/Catppuccin/`
+- `~/Videos/Wallpapers/` → `~/Videos/Wallpapers/Catppuccin/`
+
+The `catppuccin-watcher` service runs automatically on login.
 
 ## Future Enhancements (To Check Out Later)
 
 ### Terminal QoL Tools
-- **bat** - `cat` with syntax highlighting (https://github.com/sharkdp/bat)
-- **eza** - Modern `ls` with colors/icons (https://github.com/eza-community/eza)
 - **zoxide** - Smarter `cd` that learns your frequent dirs (https://github.com/ajeetdsouza/zoxide)
 - **fzf** - Fuzzy finder for everything, Ctrl+R for history (https://github.com/junegunn/fzf)
-
-### TUI File Managers
-- **yazi** - Fast terminal file manager (https://github.com/sxyazi/yazi)
-- **ranger** - Classic vim-like file manager
