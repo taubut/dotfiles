@@ -1,0 +1,4 @@
+paccache-hook
+neo-matrix
+zoxide
+fzf
