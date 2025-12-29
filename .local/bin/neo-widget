@@ -1,0 +1,31 @@
+#!/bin/bash
+# neo-matrix that runs only when music is playing
+
+NEO_PID=""
+
+cleanup() {
+    [ -n "$NEO_PID" ] && kill "$NEO_PID" 2>/dev/null
+    exit 0
+}
+trap cleanup EXIT
+
+while true; do
+    STATUS=$(playerctl status 2>/dev/null)
+
+    if [ "$STATUS" = "Playing" ]; then
+        # Start neo if not running
+        if [ -z "$NEO_PID" ] || ! kill -0 "$NEO_PID" 2>/dev/null; then
+            neo-matrix -C ~/.config/neo/catppuccin-flamingo.colors &
+            NEO_PID=$!
+        fi
+    else
+        # Stop neo if running
+        if [ -n "$NEO_PID" ] && kill -0 "$NEO_PID" 2>/dev/null; then
+            kill "$NEO_PID" 2>/dev/null
+            NEO_PID=""
+            clear
+        fi
+    fi
+
+    sleep 1
+done

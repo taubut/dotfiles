@@ -3,6 +3,12 @@ source /usr/share/cachyos-fish-config/cachyos-config.fish
 # Initialize Starship prompt
 starship init fish | source
 
+# Initialize zoxide (smarter cd)
+zoxide init fish | source
+
+# fzf keybindings (Ctrl+R for history search)
+fzf --fish | source
+
 # eza aliases (better ls)
 alias ls="eza --icons"
 alias ll="eza -la --icons --git"
