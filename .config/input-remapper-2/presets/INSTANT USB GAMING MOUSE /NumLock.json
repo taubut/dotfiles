@@ -1,0 +1,20 @@
+[
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 29,
+                "origin_hash": "478c830484b6ca86f18591f6a3fcca53"
+            },
+            {
+                "type": 1,
+                "code": 45,
+                "origin_hash": "478c830484b6ca86f18591f6a3fcca53"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "Num_Lock",
+        "name": "NumLock",
+        "mapping_type": "key_macro"
+    }
+]
