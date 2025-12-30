@@ -32,6 +32,9 @@ mkdir -p ~/.local/bin
 mkdir -p ~/.local/share/qutebrowser
 mkdir -p ~/.local/share/vicinae/themes
 mkdir -p ~/.local/share/aurorae/themes
+mkdir -p ~/Videos/ytdlp
+mkdir -p ~/Pictures/Wallpapers/Catppuccin
+mkdir -p ~/Videos/Wallpapers/Catppuccin
 
 # -----------------------------------------------------------------------------
 # STEP 3: Copy config files
