@@ -2,3 +2,6 @@ paccache-hook
 neo-matrix
 zoxide
 fzf
+deno
+mpv
+mpv-mpris
