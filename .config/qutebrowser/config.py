@@ -13,6 +13,16 @@ catppuccin.setup(c, 'macchiato', True)
 c.url.start_pages = ['https://aur.archlinux.org/']
 c.url.default_page = 'https://aur.archlinux.org/'
 
+# SearXNG as default search engine
+c.url.searchengines = {
+    'DEFAULT': 'http://192.168.1.185:9090/search?q={}',
+    'g': 'https://www.google.com/search?q={}',
+    'ddg': 'https://duckduckgo.com/?q={}',
+    'aur': 'https://aur.archlinux.org/packages?K={}',
+    'yt': 'https://www.youtube.com/results?search_query={}',
+    'gh': 'https://github.com/search?q={}',
+}
+
 # Spoof as Windows Chrome
 c.content.headers.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
