@@ -64,6 +64,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - **fd** - Modern find replacement
 - **duf** - Modern df replacement
 - **dust** - Modern du replacement
+- **neo-matrix** - Matrix rain effect with Catppuccin Flamingo theme (via neo-widget)
 
 ### Desktop Environment (KDE Plasma)
 - **SDDM** - Login screen with Catppuccin Macchiato Flamingo theme
@@ -154,7 +155,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
   - catfetch, backup
   - cava-widget, rmpc-widget
   - catppuccinify, catppuccin-watcher
-  - dotfiles-sync
+  - neo-widget, dotfiles-sync
 
 ## File Locations
 
@@ -176,6 +177,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - ~/.config/qutebrowser/config.py
 - ~/.config/qutebrowser/catppuccin/ (theme module)
 - ~/.local/share/qutebrowser/greasemonkey/SponsorBlock.user.js
+- ~/.config/neo/catppuccin-flamingo.colors
 
 ### Custom Scripts
 - ~/.local/bin/backup - Borg backup script
@@ -185,6 +187,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - ~/.local/bin/rmpc-widget - Launch rmpc in Ghostty window
 - ~/.local/bin/catppuccinify - Convert images/videos to Catppuccin colors
 - ~/.local/bin/catppuccin-watcher - Auto-convert wallpapers dropped in ~/Pictures/Wallpapers
+- ~/.local/bin/neo-widget - Matrix rain that starts/stops with music playback
 
 ### Systemd User Services
 - ~/.config/systemd/user/vicinae.service
@@ -228,6 +231,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - fd
 - duf
 - dust
+- neo-matrix
 
 ## Catppuccin Wallpaper Pipeline
 
