@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # Music picker using rofi and mpc
-# Relative path to mpd's music directory must be used
+# Searches MPD database - shows "Artist - Album - Title" format
 
-MUSIC_DIR="$HOME/Music/SS"
+# Get all songs formatted as "Artist - Album - Title\tfile"
+selection=$(mpc listall -f "%artist% - %album% - %title%\t%file%" | \
+    rofi -dmenu -i -p "Play" -display-columns 1) || exit 0
 
-# Find music files, strip path prefix for MPD relative paths
-file=$(fd . "$MUSIC_DIR" -t f -e mp3 -e flac -e m4a -e opus -e ogg -e wav | \
-    sort | \
-    sed "s|^$HOME/Music/SS/||" | \
-    rofi -dmenu -i -p "Play") || exit 0
+# Extract the file path (after the tab)
+file=$(echo "$selection" | cut -f2)
 
-notify-send "Playing $file" && \
+notify-send "Playing $(echo "$selection" | cut -f1)" && \
     mpc insert "$file" && \
     mpc next >/dev/null && \
     mpc play >/dev/null

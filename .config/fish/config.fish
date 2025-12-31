@@ -29,6 +29,11 @@ alias find="fd"
 # speedtest alias
 alias speedtest="speedtest++ --test-server stosat-ndhm-01.sys.comcast.net:8080,1774"
 
+# paru shortcuts
+alias S="paru -Ss"    # search packages
+alias Si="paru -S"    # install package
+alias Su="paru -Syu"  # system update
+
 # overwrite greeting with neofetch cat
 function fish_greeting
     neofetch
