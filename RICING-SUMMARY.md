@@ -65,6 +65,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - **duf** - Modern df replacement
 - **dust** - Modern du replacement
 - **neo-matrix** - Matrix rain effect with Catppuccin Flamingo theme (via neo-widget)
+- **rofi** - dmenu-style launcher with Catppuccin Flamingo theme (used for music picker)
 
 ### Desktop Environment (KDE Plasma)
 - **SDDM** - Login screen with Catppuccin Macchiato Flamingo theme
@@ -154,7 +155,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
   - ghostty, fish, starship
   - cava, btop, conky
   - vicinae, neofetch, fastfetch
-  - rmpc, mpd, yazi
+  - rmpc, mpd, yazi, rofi
   - qutebrowser (with Catppuccin theme and greasemonkey scripts)
   - KDE configs (plasma-appletsrc, kwinrulesrc)
   - ActiveAccentFrame window decoration
@@ -163,7 +164,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
   - catfetch, backup
   - cava-widget, rmpc-widget
   - catppuccinify, catppuccin-watcher
-  - neo-widget, dotfiles-sync
+  - neo-widget, rofi-music, dotfiles-sync
 
 ## File Locations
 
@@ -186,6 +187,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - ~/.config/qutebrowser/catppuccin/ (theme module)
 - ~/.local/share/qutebrowser/greasemonkey/SponsorBlock.user.js
 - ~/.config/neo/catppuccin-flamingo.colors
+- ~/.config/rofi/config.rasi
 
 ### Custom Scripts
 - ~/.local/bin/backup - Borg backup script
@@ -196,6 +198,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - ~/.local/bin/catppuccinify - Convert images/videos to Catppuccin colors
 - ~/.local/bin/catppuccin-watcher - Auto-convert wallpapers dropped in ~/Pictures/Wallpapers
 - ~/.local/bin/neo-widget - Matrix rain that starts/stops with music playback
+- ~/.local/bin/rofi-music - Search and play music via rofi (Ctrl+Alt+Meta+M)
 
 ### Systemd User Services
 - ~/.config/systemd/user/vicinae.service
@@ -207,6 +210,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 
 ## Keyboard Shortcuts
 - **Meta + Space** - Vicinae launcher
+- **Ctrl + Alt + Meta + M** - Rofi music picker
 - **Super + Left Click Drag** - Move window
 - **Super + Right Click Drag** - Resize window
 
@@ -240,6 +244,8 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - duf
 - dust
 - neo-matrix
+- rofi
+- mpc
 
 ## Catppuccin Wallpaper Pipeline
 

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Music picker using rofi and mpc
+# Relative path to mpd's music directory must be used
+
+MUSIC_DIR="$HOME/Music/SS"
+
+# Find music files, strip path prefix for MPD relative paths
+file=$(fd . "$MUSIC_DIR" -t f -e mp3 -e flac -e m4a -e opus -e ogg -e wav | \
+    sort | \
+    sed "s|^$HOME/Music/SS/||" | \
+    rofi -dmenu -i -p "Play") || exit 0
+
+notify-send "Playing $file" && \
+    mpc insert "$file" && \
+    mpc next >/dev/null && \
+    mpc play >/dev/null
