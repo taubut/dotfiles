@@ -102,6 +102,14 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - **Remember Window Positions** - Restores window positions on launch
 - **Built-in Tiling** - Meta+T for tile layout, Shift+drag to tile
 
+### Music Library (MPD)
+- **NTFS Drive Automount** - 2ndPro drive mounts at `/mnt/2ndPro` via fstab
+- **Symlink** - `~/Music/SS` → `/mnt/2ndPro/Soulseek Downloads/complete`
+- **fstab entry:**
+  ```
+  UUID=840048A400489F54 /mnt/2ndPro ntfs3 defaults,uid=1000,gid=1000,dmask=022,fmask=133 0 0
+  ```
+
 ### Backup System
 - **Borg Backup** - Script at ~/.local/bin/backup
   - Backs up home directory to Unraid NAS (smb://192.168.1.185/BubMachine/)
