@@ -13,6 +13,12 @@ catppuccin.setup(c, 'macchiato', True)
 c.url.start_pages = ['https://aur.archlinux.org/']
 c.url.default_page = 'https://aur.archlinux.org/'
 
+# Open new tabs in background
+c.tabs.background = True
+
+# Block autoplay
+c.content.autoplay = False
+
 # SearXNG as default search engine
 c.url.searchengines = {
     'DEFAULT': 'http://192.168.1.185:9090/search?q={}',
