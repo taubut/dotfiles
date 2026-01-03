@@ -5,3 +5,6 @@ fzf
 deno
 mpv
 mpv-mpris
+lutgen
+rofi
+mpc
