@@ -8,29 +8,52 @@
 
 ## Quick Restore (New Machine)
 
-### From Dotfiles (Recommended)
+### Using GNU Stow (Recommended)
 ```bash
 # 1. Install CachyOS with KDE Plasma
 
-# 2. Clone dotfiles
+# 2. Install stow and packages
+paru -S stow
+paru -S --needed - < package-list.txt
+
+# 3. Clone dotfiles
 git clone https://github.com/taubut/dotfiles.git
 cd dotfiles
 
-# 3. Run restore script
-./restore.sh
+# 4. Stow all packages (creates symlinks)
+stow shell terminal fetch music browser launcher kde scripts assets yazi yt-dlp input-remapper
 
-# 4. Reboot
+# 5. Enable services
+systemctl --user enable --now vicinae catppuccin-watcher mpd
+
+# 6. Reboot
 reboot
 ```
 
-The restore script automatically:
-- Installs all packages from `package-list.txt`
-- Copies all config files to `~/.config/`
-- Copies scripts to `~/.local/bin/`
-- Copies themes (Vicinae, Aurorae window decorations)
-- Installs Yazi Catppuccin flavor
-- Generates lutgen LUT for video catppuccinification
-- Enables systemd services (Vicinae, catppuccin-watcher)
+### Stow Packages
+| Package | Contents |
+|---------|----------|
+| `shell` | fish, starship |
+| `terminal` | ghostty, btop, fresh |
+| `fetch` | neofetch, fastfetch |
+| `music` | cava, mpd, rmpc, neo-matrix colors |
+| `browser` | qutebrowser + greasemonkey |
+| `launcher` | rofi, vicinae + themes |
+| `kde` | plasma configs, kwin rules, conky, aurorae themes, systemd services |
+| `scripts` | all ~/.local/bin scripts, lutgen LUT, rofi-music.desktop |
+| `assets` | Pictures (cat-ascii, nzxt logo) |
+| `yazi` | yazi file manager |
+| `yt-dlp` | yt-dlp config |
+| `input-remapper` | macro keyboard config |
+
+### Selective Install
+```bash
+# Only install shell + terminal
+stow shell terminal
+
+# Add music stuff later
+stow music
+```
 
 ### Post-Restore Steps
 1. Set your wallpaper
