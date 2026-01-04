@@ -1,0 +1,74 @@
+configuration {
+    modi: "drun,run,filebrowser";
+    show-icons: false;
+    font: "JetBrainsMono Nerd Font 12";
+}
+
+/* Catppuccin Macchiato Flamingo - dmenu style */
+* {
+    bg: #24273a;
+    bg-alt: #1e2030;
+    fg: #cad3f5;
+    fg-alt: #6e738d;
+    accent: #f0c6c6;
+
+    background-color: @bg;
+    text-color: @fg;
+    margin: 0;
+    padding: 0;
+}
+
+window {
+    fullscreen: false;
+    width: 100%;
+    location: south;
+    anchor: south;
+    border: 2px solid;
+    border-color: @accent;
+    border-radius: 0;
+    children: [mainbox];
+}
+
+mainbox {
+    children: [inputbar, listview];
+    orientation: horizontal;
+}
+
+inputbar {
+    children: [prompt, entry];
+    padding: 8px 12px;
+    background-color: @bg-alt;
+}
+
+prompt {
+    padding: 0 8px 0 0;
+    text-color: @accent;
+}
+
+entry {
+    placeholder: "Search...";
+    placeholder-color: @fg-alt;
+    text-color: @accent;
+    width: 600px;
+}
+
+listview {
+    layout: horizontal;
+    lines: 1;
+    padding: 8px;
+    scrollbar: false;
+}
+
+element {
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+element selected {
+    background-color: @accent;
+    text-color: @bg;
+}
+
+element-text {
+    text-color: inherit;
+}

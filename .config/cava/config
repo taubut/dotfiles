@@ -1,0 +1,24 @@
+[general]
+framerate = 60
+bars = 48
+bar_width = 12
+bar_spacing = 4
+
+[output]
+method = sdl
+sdl_width = 1000
+sdl_height = 400
+
+[color]
+background = '#24273a'
+
+gradient = 1
+
+gradient_color_1 = '#f4dbd6'
+gradient_color_2 = '#f0c6c6'
+gradient_color_3 = '#f0c6c6'
+gradient_color_4 = '#f0c6c6'
+gradient_color_5 = '#f0c6c6'
+gradient_color_6 = '#f0c6c6'
+gradient_color_7 = '#eebebe'
+gradient_color_8 = '#e8a9a9'
