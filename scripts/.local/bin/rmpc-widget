@@ -1,0 +1,4 @@
+#!/bin/bash
+# Launch rmpc in its own Ghostty window
+mpd 2>/dev/null  # Start MPD if not running
+nohup ghostty --class=rmpc-widget --title=rmpc -e rmpc > /dev/null 2>&1 &

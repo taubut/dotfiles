@@ -1,7 +1,0 @@
-[Desktop Entry]
-Name=Rofi Music Picker
-Comment=Search and play music via rofi
-Exec=/home/taubut/.local/bin/rofi-music
-Icon=audio-headphones
-Type=Application
-Categories=Audio;Music;

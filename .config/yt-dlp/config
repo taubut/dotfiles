@@ -1,3 +1,0 @@
---remote-components ejs:github
---cookies-from-browser firefox
--o ~/Videos/ytdlp/%(title)s.%(ext)s

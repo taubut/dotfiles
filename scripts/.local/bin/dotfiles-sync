@@ -1,0 +1,104 @@
+#!/bin/bash
+# Auto-sync dotfiles to GitHub (GNU Stow structure)
+
+DOTFILES=~/dotfiles
+
+# ─── Shell Package ───
+mkdir -p "$DOTFILES/shell/.config/fish"
+cp -r ~/.config/fish/* "$DOTFILES/shell/.config/fish/" 2>/dev/null
+cp ~/.config/starship.toml "$DOTFILES/shell/.config/" 2>/dev/null
+
+# ─── Terminal Package ───
+mkdir -p "$DOTFILES/terminal/.config/ghostty"
+mkdir -p "$DOTFILES/terminal/.config/btop"
+mkdir -p "$DOTFILES/terminal/.config/fresh"
+cp -r ~/.config/ghostty/* "$DOTFILES/terminal/.config/ghostty/" 2>/dev/null
+cp -r ~/.config/btop/* "$DOTFILES/terminal/.config/btop/" 2>/dev/null
+cp -r ~/.config/fresh/* "$DOTFILES/terminal/.config/fresh/" 2>/dev/null
+
+# ─── Fetch Package ───
+mkdir -p "$DOTFILES/fetch/.config/neofetch"
+mkdir -p "$DOTFILES/fetch/.config/fastfetch"
+cp -r ~/.config/neofetch/* "$DOTFILES/fetch/.config/neofetch/" 2>/dev/null
+cp -r ~/.config/fastfetch/* "$DOTFILES/fetch/.config/fastfetch/" 2>/dev/null
+
+# ─── Music Package ───
+mkdir -p "$DOTFILES/music/.config/cava"
+mkdir -p "$DOTFILES/music/.config/mpd"
+mkdir -p "$DOTFILES/music/.config/rmpc"
+mkdir -p "$DOTFILES/music/.config/neo"
+cp -r ~/.config/cava/* "$DOTFILES/music/.config/cava/" 2>/dev/null
+cp -r ~/.config/mpd/* "$DOTFILES/music/.config/mpd/" 2>/dev/null
+cp -r ~/.config/rmpc/* "$DOTFILES/music/.config/rmpc/" 2>/dev/null
+cp -r ~/.config/neo/* "$DOTFILES/music/.config/neo/" 2>/dev/null
+
+# ─── Browser Package (qutebrowser) ───
+mkdir -p "$DOTFILES/browser/.config/qutebrowser"
+mkdir -p "$DOTFILES/browser/.local/share/qutebrowser/greasemonkey"
+# Copy qutebrowser config but exclude .git submodule
+rsync -a --exclude='.git' ~/.config/qutebrowser/ "$DOTFILES/browser/.config/qutebrowser/" 2>/dev/null
+cp -r ~/.local/share/qutebrowser/greasemonkey/* "$DOTFILES/browser/.local/share/qutebrowser/greasemonkey/" 2>/dev/null
+
+# ─── Launcher Package (rofi, vicinae) ───
+mkdir -p "$DOTFILES/launcher/.config/rofi"
+mkdir -p "$DOTFILES/launcher/.config/vicinae"
+mkdir -p "$DOTFILES/launcher/.local/share/vicinae/themes"
+cp ~/.config/rofi/config.rasi "$DOTFILES/launcher/.config/rofi/" 2>/dev/null
+cp -r ~/.config/vicinae/* "$DOTFILES/launcher/.config/vicinae/" 2>/dev/null
+cp -r ~/.local/share/vicinae/themes/* "$DOTFILES/launcher/.local/share/vicinae/themes/" 2>/dev/null
+
+# ─── KDE Package ───
+mkdir -p "$DOTFILES/kde/.config/conky"
+mkdir -p "$DOTFILES/kde/.config/systemd/user"
+mkdir -p "$DOTFILES/kde/.local/share/aurorae/themes"
+cp ~/.config/plasma-org.kde.plasma.desktop-appletsrc "$DOTFILES/kde/.config/" 2>/dev/null
+cp ~/.config/kwinrulesrc "$DOTFILES/kde/.config/" 2>/dev/null
+cp -r ~/.config/conky/* "$DOTFILES/kde/.config/conky/" 2>/dev/null
+cp ~/.config/systemd/user/catppuccin-watcher.service "$DOTFILES/kde/.config/systemd/user/" 2>/dev/null
+cp ~/.config/systemd/user/vicinae.service "$DOTFILES/kde/.config/systemd/user/" 2>/dev/null
+rsync -a --exclude='.git' ~/.local/share/aurorae/themes/ActiveAccentFrame/ "$DOTFILES/kde/.local/share/aurorae/themes/ActiveAccentFrame/" 2>/dev/null
+
+# ─── Scripts Package ───
+mkdir -p "$DOTFILES/scripts/.local/bin"
+mkdir -p "$DOTFILES/scripts/.local/share/applications"
+cp ~/.local/bin/catfetch "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/cava-widget "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/backup "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/catppuccinify "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/catppuccin-watcher "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/neo-widget "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/rmpc-widget "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/rofi-music "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/dotfiles-sync "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/share/applications/rofi-music.desktop "$DOTFILES/scripts/.local/share/applications/" 2>/dev/null
+
+# ─── Assets Package ───
+mkdir -p "$DOTFILES/assets/Pictures/nzxt"
+cp ~/Pictures/cat-ascii.txt "$DOTFILES/assets/Pictures/" 2>/dev/null
+cp ~/Pictures/nzxt/catppuccin_logo.svg "$DOTFILES/assets/Pictures/nzxt/" 2>/dev/null
+cp ~/Pictures/nzxt/catppuccin_logo.ans "$DOTFILES/assets/Pictures/nzxt/" 2>/dev/null
+
+# ─── Yazi Package ───
+mkdir -p "$DOTFILES/yazi/.config/yazi"
+# Copy yazi config but exclude .git submodules in flavors
+rsync -a --exclude='.git' ~/.config/yazi/ "$DOTFILES/yazi/.config/yazi/" 2>/dev/null
+
+# ─── yt-dlp Package ───
+mkdir -p "$DOTFILES/yt-dlp/.config/yt-dlp"
+cp ~/.config/yt-dlp/config "$DOTFILES/yt-dlp/.config/yt-dlp/" 2>/dev/null
+
+# ─── Input-remapper Package ───
+mkdir -p "$DOTFILES/input-remapper/.config/input-remapper-2"
+cp -r ~/.config/input-remapper-2/* "$DOTFILES/input-remapper/.config/input-remapper-2/" 2>/dev/null
+
+# ─── Niri Package ───
+mkdir -p "$DOTFILES/niri/.config/niri"
+cp ~/.config/niri/config.kdl "$DOTFILES/niri/.config/niri/" 2>/dev/null
+
+# Commit and push if there are changes
+cd "$DOTFILES"
+if [[ -n $(git status -s) ]]; then
+    git add -A
+    git commit -m "Auto-sync $(date '+%Y-%m-%d %H:%M')"
+    git push
+fi
