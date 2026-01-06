@@ -34,6 +34,9 @@ alias S="paru -Ss"    # search packages
 alias Si="paru -S"    # install package
 alias Su="paru -Syu"  # system update
 
+# RDP to Windows PC
+alias rdp="xfreerdp3 /v:192.168.1.119 /u:taubut@gmail.com /dynamic-resolution"
+
 # overwrite greeting with neofetch cat
 function fish_greeting
     neofetch
