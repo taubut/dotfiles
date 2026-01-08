@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""
+Clean Music Tags - Remove "feat." and similar from artist names
+Usage:
+    clean-music-tags                    # Dry run - show what would change
+    clean-music-tags --apply            # Actually apply changes
+    clean-music-tags --path /some/path  # Scan specific directory
+"""
+
+import os
+import sys
+import re
+import argparse
+from pathlib import Path
+
+try:
+    from mutagen.easyid3 import EasyID3
+    from mutagen.id3 import ID3NoHeaderError
+    from mutagen.flac import FLAC
+    from mutagen.mp4 import MP4
+    from mutagen.oggvorbis import OggVorbis
+except ImportError:
+    print("Error: mutagen library not found")
+    print("Install with: pip install mutagen")
+    sys.exit(1)
+
+# Patterns to match featuring artists
+# These will be removed from the artist name
+# NOTE: We avoid "&" and "and" as they're often part of band names
+FEAT_PATTERNS = [
+    r'\s+feat\.?\s+.*$',           # feat. or feat
+    r'\s+ft\.?\s+.*$',             # ft. or ft
+    r'\s+featuring\s+.*$',          # featuring
+    r'\s*\([^)]*feat[^)]*\)$',      # (feat. ...) at end
+    r'\s*\([^)]*ft\.?[^)]*\)$',     # (ft. ...) at end
+    r'\s*\[[^\]]*feat[^\]]*\]$',    # [feat. ...] at end
+    r'\s*\[[^\]]*ft\.?[^\]]*\]$',   # [ft. ...] at end
+]
+
+# Compile patterns (case insensitive)
+COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in FEAT_PATTERNS]
+
+def clean_artist(artist):
+    """Remove featuring artists from artist name"""
+    if not artist:
+        return artist
+
+    original = artist
+    cleaned = artist
+
+    for pattern in COMPILED_PATTERNS:
+        cleaned = pattern.sub('', cleaned)
+
+    # Strip whitespace
+    cleaned = cleaned.strip()
+
+    # If we cleaned everything away, return original
+    if not cleaned:
+        return original
+
+    return cleaned
+
+def get_artist_from_file(filepath):
+    """Get artist tag from music file"""
+    ext = filepath.suffix.lower()
+
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            return audio.get('artist', [None])[0]
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            return audio.get('artist', [None])[0]
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            artists = audio.get('\xa9ART', [None])
+            return artists[0] if artists else None
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            return audio.get('artist', [None])[0]
+    except Exception as e:
+        print(f"  Error reading {filepath}: {e}")
+
+    return None
+
+def set_artist_in_file(filepath, new_artist):
+    """Set artist tag in music file"""
+    ext = filepath.suffix.lower()
+
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            audio['\xa9ART'] = [new_artist]
+            audio.save()
+            return True
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+    except Exception as e:
+        print(f"  Error writing {filepath}: {e}")
+
+    return False
+
+def scan_directory(path, apply_changes=False):
+    """Scan directory for music files and clean artist tags"""
+    path = Path(path).expanduser()
+
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    extensions = {'.mp3', '.flac', '.m4a', '.mp4', '.aac', '.ogg'}
+    changes = []
+
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+
+            if filepath.suffix.lower() not in extensions:
+                continue
+
+            artist = get_artist_from_file(filepath)
+
+            if not artist:
+                continue
+
+            cleaned = clean_artist(artist)
+
+            if cleaned != artist:
+                changes.append({
+                    'file': filepath,
+                    'original': artist,
+                    'cleaned': cleaned
+                })
+
+    if not changes:
+        print("No changes needed - all artist tags look clean!")
+        return
+
+    # Group by original artist for cleaner output
+    by_artist = {}
+    for change in changes:
+        orig = change['original']
+        if orig not in by_artist:
+            by_artist[orig] = {
+                'cleaned': change['cleaned'],
+                'files': []
+            }
+        by_artist[orig]['files'].append(change['file'])
+
+    print(f"\nFound {len(changes)} files to update:\n")
+
+    for original, data in sorted(by_artist.items()):
+        print(f"  \"{original}\"")
+        print(f"    → \"{data['cleaned']}\"")
+        print(f"    ({len(data['files'])} file(s))")
+        print()
+
+    if apply_changes:
+        print("-" * 60)
+        print("Applying changes...")
+
+        success = 0
+        failed = 0
+
+        for change in changes:
+            if set_artist_in_file(change['file'], change['cleaned']):
+                success += 1
+            else:
+                failed += 1
+
+        print(f"\nDone! Updated {success} files, {failed} failed")
+        print("\nRun 'mpc update' to refresh MPD database")
+    else:
+        print("-" * 60)
+        print(f"DRY RUN - No changes made")
+        print(f"Run with --apply to make changes")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Clean "feat." and similar from music artist tags'
+    )
+    parser.add_argument(
+        '--apply', '-a',
+        action='store_true',
+        help='Actually apply changes (default is dry run)'
+    )
+    parser.add_argument(
+        '--path', '-p',
+        default='~/Music/SS',
+        help='Path to music directory (default: ~/Music/SS)'
+    )
+
+    args = parser.parse_args()
+
+    scan_directory(args.path, args.apply)
+
+if __name__ == '__main__':
+    main()
