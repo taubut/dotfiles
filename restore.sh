@@ -16,7 +16,7 @@ echo ""
 # -----------------------------------------------------------------------------
 # STEP 1: Install packages
 # -----------------------------------------------------------------------------
-echo "[1/7] Installing packages..."
+echo "[1/6] Installing packages..."
 if [ -f "$DOTFILES/package-list.txt" ]; then
     paru -S --needed - < "$DOTFILES/package-list.txt" || echo "Some packages may have failed, continuing..."
 else
@@ -26,7 +26,7 @@ fi
 # -----------------------------------------------------------------------------
 # STEP 2: Create directories
 # -----------------------------------------------------------------------------
-echo "[2/7] Creating directories..."
+echo "[2/6] Creating directories..."
 mkdir -p ~/.config
 mkdir -p ~/.local/bin
 mkdir -p ~/.local/share/qutebrowser
@@ -37,32 +37,51 @@ mkdir -p ~/Pictures/Wallpapers/Catppuccin
 mkdir -p ~/Videos/Wallpapers/Catppuccin
 
 # -----------------------------------------------------------------------------
-# STEP 3: Copy config files
+# STEP 3: Stow all configs
 # -----------------------------------------------------------------------------
-echo "[3/7] Copying config files..."
-cp -r "$DOTFILES/.config/"* ~/.config/ 2>/dev/null || true
+echo "[3/6] Stowing config packages..."
+cd "$DOTFILES"
 
-# -----------------------------------------------------------------------------
-# STEP 4: Copy local files (scripts, themes)
-# -----------------------------------------------------------------------------
-echo "[4/7] Copying scripts and local files..."
-cp -r "$DOTFILES/.local/bin/"* ~/.local/bin/ 2>/dev/null || true
-cp -r "$DOTFILES/.local/share/"* ~/.local/share/ 2>/dev/null || true
+# List of stow packages (directories with .config or .local inside)
+STOW_PACKAGES=(
+    browser
+    fetch
+    input-remapper
+    kde
+    launcher
+    music
+    niri
+    scripts
+    shell
+    terminal
+    wallust
+    yazi
+    yt-dlp
+)
+
+for pkg in "${STOW_PACKAGES[@]}"; do
+    if [ -d "$pkg" ]; then
+        echo "  Stowing $pkg..."
+        stow -R "$pkg" 2>/dev/null || echo "    Warning: $pkg may have conflicts"
+    fi
+done
 
 # Make scripts executable
 chmod +x ~/.local/bin/* 2>/dev/null || true
 
 # -----------------------------------------------------------------------------
-# STEP 5: Copy pictures/assets
+# STEP 4: Copy assets (non-stow items)
 # -----------------------------------------------------------------------------
-echo "[5/7] Copying pictures and assets..."
-mkdir -p ~/Pictures/nzxt
-cp -r "$DOTFILES/Pictures/"* ~/Pictures/ 2>/dev/null || true
+echo "[4/6] Copying assets..."
+if [ -d "$DOTFILES/assets" ]; then
+    mkdir -p ~/Pictures/nzxt
+    cp "$DOTFILES/assets/"* ~/Pictures/nzxt/ 2>/dev/null || true
+fi
 
 # -----------------------------------------------------------------------------
-# STEP 6: Install themes and plugins
+# STEP 5: Install themes and plugins
 # -----------------------------------------------------------------------------
-echo "[6/7] Installing themes and plugins..."
+echo "[5/6] Installing themes and plugins..."
 
 # Yazi flavor
 if command -v ya &> /dev/null; then
@@ -79,9 +98,9 @@ if command -v lutgen &> /dev/null; then
 fi
 
 # -----------------------------------------------------------------------------
-# STEP 7: Enable systemd user services
+# STEP 6: Enable systemd user services
 # -----------------------------------------------------------------------------
-echo "[7/7] Enabling systemd services..."
+echo "[6/6] Enabling systemd services..."
 systemctl --user daemon-reload
 
 # Vicinae launcher
@@ -105,5 +124,9 @@ echo "  1. Log out and back in (or reboot) for all changes to take effect"
 echo "  2. Set your wallpaper"
 echo "  3. Configure KDE settings (panel, window rules, etc.)"
 echo "  4. Run ':adblock-update' in qutebrowser"
+echo ""
+echo "Theme switching:"
+echo "  toggle-theme catppuccin    - Use Catppuccin Macchiato Flamingo"
+echo "  toggle-theme wallust <img> - Dynamic colors from wallpaper"
 echo ""
 echo "Enjoy your rice!"

@@ -9,3 +9,4 @@ lutgen
 rofi
 mpc
 stow
+wallust

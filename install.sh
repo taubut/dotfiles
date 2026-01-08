@@ -1,30 +1,53 @@
 #!/bin/bash
-# Dotfiles install script - symlinks configs to proper locations
+# =============================================================================
+# Dotfiles Install Script (Quick)
+# =============================================================================
+# Symlinks configs using GNU Stow - use this for quick updates
+# For full restore on fresh install, use restore.sh instead
+# =============================================================================
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
 
-echo "Installing dotfiles from $DOTFILES"
+echo "Installing dotfiles from $DOTFILES using stow"
+echo ""
 
-# Create directories
+# Create base directories
 mkdir -p ~/.config
 mkdir -p ~/.local/bin
-mkdir -p ~/Pictures/nzxt
+mkdir -p ~/.local/share
 
-# Symlink configs
-ln -sf "$DOTFILES/.config/ghostty" ~/.config/
-ln -sf "$DOTFILES/.config/starship.toml" ~/.config/
-ln -sf "$DOTFILES/.config/cava" ~/.config/
-ln -sf "$DOTFILES/.config/fish" ~/.config/
-ln -sf "$DOTFILES/.config/btop" ~/.config/
-ln -sf "$DOTFILES/.config/walker" ~/.config/
-ln -sf "$DOTFILES/.config/fresh" ~/.config/
+cd "$DOTFILES"
 
-# Symlink scripts
-ln -sf "$DOTFILES/.local/bin/catfetch" ~/.local/bin/
-ln -sf "$DOTFILES/.local/bin/backup" ~/.local/bin/
+# Stow all packages
+STOW_PACKAGES=(
+    browser
+    fetch
+    input-remapper
+    kde
+    launcher
+    music
+    niri
+    scripts
+    shell
+    terminal
+    wallust
+    yazi
+    yt-dlp
+)
 
-# Symlink images
-ln -sf "$DOTFILES/Pictures/nzxt/catppuccin_logo.svg" ~/Pictures/nzxt/
-ln -sf "$DOTFILES/Pictures/nzxt/catppuccin_logo.ans" ~/Pictures/nzxt/ 2>/dev/null
+for pkg in "${STOW_PACKAGES[@]}"; do
+    if [ -d "$pkg" ]; then
+        echo "Stowing $pkg..."
+        stow -R "$pkg" 2>/dev/null || echo "  Warning: $pkg may have conflicts"
+    fi
+done
 
+# Make scripts executable
+chmod +x ~/.local/bin/* 2>/dev/null || true
+
+echo ""
 echo "Done! Restart your shell to apply changes."
+echo ""
+echo "Available commands:"
+echo "  toggle-theme catppuccin    - Use Catppuccin Macchiato Flamingo"
+echo "  toggle-theme wallust <img> - Dynamic colors from wallpaper"
