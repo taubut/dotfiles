@@ -1,0 +1,28 @@
+# Wallust generated Yazi theme
+
+[mgr]
+cwd = { fg = "{{color4}}" }
+
+[tabs]
+active   = { fg = "{{color0}}", bg = "{{color4}}", bold = true }
+inactive = { fg = "{{color4}}", bg = "{{color8}}" }
+
+[mode]
+normal_main = { fg = "{{color0}}", bg = "{{color4}}", bold = true }
+normal_alt  = { fg = "{{color4}}", bg = "{{color8}}" }
+
+[filetype]
+rules = [
+    # Folders - accent color
+    { name = "*/", fg = "{{color4}}" },
+    # Image
+    { mime = "image/*", fg = "{{color6}}" },
+    # Media
+    { mime = "{audio,video}/*", fg = "{{color3}}" },
+    # Archive
+    { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "{{color5}}" },
+    # Document
+    { mime = "application/{pdf,doc,rtf}", fg = "{{color2}}" },
+    # Fallback
+    { name = "*", fg = "{{foreground}}" },
+]

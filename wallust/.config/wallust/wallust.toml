@@ -50,3 +50,4 @@ rmpc = { template = 'rmpc-theme.ron', target = '~/.config/rmpc/theme.ron' }
 btop = { template = 'btop-wallust.theme', target = '~/.config/btop/themes/wallust.theme' }
 vicinae = { template = 'vicinae-wallust.toml', target = '~/.local/share/vicinae/themes/wallust.toml' }
 conky = { template = 'conky.conf', target = '~/.config/conky/conky.conf', new_engine = true }
+yazi = { template = 'yazi-theme.toml', target = '~/.config/yazi/theme.toml' }
