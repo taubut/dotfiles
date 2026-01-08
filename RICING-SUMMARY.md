@@ -3,30 +3,44 @@
 ## Theme
 - **Color Scheme:** Catppuccin Macchiato
 - **Accent Color:** Flamingo (#f0c6c6)
+- **Dynamic Theming:** Wallust (extract colors from any wallpaper)
 
 ---
 
 ## Quick Restore (New Machine)
 
-### Using GNU Stow (Recommended)
+### Using restore.sh (Recommended)
 ```bash
 # 1. Install CachyOS with KDE Plasma
 
-# 2. Install stow and packages
-paru -S stow
-paru -S --needed - < package-list.txt
-
-# 3. Clone dotfiles
+# 2. Clone dotfiles
 git clone https://github.com/taubut/dotfiles.git
 cd dotfiles
 
-# 4. Stow all packages (creates symlinks)
-stow shell terminal fetch music browser launcher kde scripts assets yazi yt-dlp input-remapper
+# 3. Run restore script (installs packages, stows configs, enables services)
+./restore.sh
 
-# 5. Enable services
+# 4. Reboot
+reboot
+```
+
+### Using GNU Stow (Manual)
+```bash
+# 1. Install stow and packages
+paru -S stow
+paru -S --needed - < package-list.txt
+
+# 2. Clone dotfiles
+git clone https://github.com/taubut/dotfiles.git
+cd dotfiles
+
+# 3. Stow all packages (creates symlinks)
+stow shell terminal fetch music browser launcher kde scripts wallust yazi yt-dlp input-remapper niri
+
+# 4. Enable services
 systemctl --user enable --now vicinae catppuccin-watcher mpd
 
-# 6. Reboot
+# 5. Reboot
 reboot
 ```
 
@@ -41,10 +55,11 @@ reboot
 | `launcher` | rofi, vicinae + themes |
 | `kde` | plasma configs, kwin rules, conky, aurorae themes, systemd services |
 | `scripts` | all ~/.local/bin scripts, lutgen LUT, rofi-music.desktop |
-| `assets` | Pictures (cat-ascii, nzxt logo) |
+| `wallust` | wallust config + templates for dynamic theming |
 | `yazi` | yazi file manager |
 | `yt-dlp` | yt-dlp config |
 | `input-remapper` | macro keyboard config |
+| `niri` | niri WM config (optional) |
 
 ### Selective Install
 ```bash
@@ -61,9 +76,50 @@ stow music
 3. Apply window rules in KDE System Settings
 4. Run `:adblock-update` in qutebrowser
 5. Log into apps (Zen Browser, Discord, etc.)
+6. Enable "Accent color from wallpaper" in KDE settings for dynamic window decorations
 
 ### From Borg Backup (Full Restore)
 See "Restoring from Borg Backup" section below for complete home directory restoration.
+
+---
+
+## Dynamic Theming (Wallust)
+
+### Overview
+Wallust extracts colors from any wallpaper and applies them system-wide. Toggle between dynamic wallust colors and static Catppuccin theme instantly.
+
+### Usage
+```bash
+# Apply dynamic colors from wallpaper
+toggle-theme wallust ~/Pictures/Wallpapers/some-image.jpg
+
+# Restore Catppuccin Macchiato Flamingo
+toggle-theme catppuccin
+
+# Check current theme mode
+toggle-theme status
+```
+
+### Apps Themed by Wallust
+- Ghostty (terminal colors)
+- Rofi (launcher)
+- Cava (audio visualizer)
+- Starship (prompt)
+- rmpc (music player)
+- btop (system monitor)
+- Vicinae (launcher)
+- Conky (desktop widget)
+- Yazi (file manager)
+- KDE accent color (window decorations) - via "Accent from wallpaper" setting
+
+### Notes
+- Wallpaper is set on main display only (not portrait monitor)
+- Ghostty requires closing all windows for new instances to pick up theme
+- KDE's "Accent color from wallpaper" handles window decoration colors automatically
+
+### Wallust Templates Location
+- `~/.config/wallust/wallust.toml` - Main config
+- `~/.config/wallust/templates/` - App-specific templates
 
 ---
 
@@ -90,6 +146,11 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - **neo-matrix** - Matrix rain effect with Catppuccin Flamingo theme (via neo-widget)
 - **rofi** - dmenu-style launcher with Catppuccin Flamingo theme (used for music picker)
 
+### Media
+- **mpv** - Video player with uosc UI and thumbfast for thumbnail scrubbing
+  - Config: `~/.config/mpv/mpv.conf`
+  - Scripts: `~/.config/mpv/scripts/` (uosc, thumbfast)
+
 ### Desktop Environment (KDE Plasma)
 - **SDDM** - Login screen with Catppuccin Macchiato Flamingo theme
 - **Conky** - System monitor widget with weather, now playing, system stats
@@ -97,7 +158,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - **Panel Colorizer** - Translucent panel with custom opacity
 - **Papirus Icons** - With Catppuccin Macchiato Flamingo folder colors
 - **Cursor** - Catppuccin Macchiato Flamingo
-- **Window Decoration** - ActiveAccentFrame (no titlebar, 1px flamingo border)
+- **Window Decoration** - ActiveAccentFrame (no titlebar, 1px accent border)
 
 ### Browsers & Apps
 - **Zen Browser** - userChrome.css with Catppuccin Macchiato Flamingo, 90% opacity
@@ -133,6 +194,25 @@ See "Restoring from Borg Backup" section below for complete home directory resto
   ```
   UUID=840048A400489F54 /mnt/2ndPro ntfs3 defaults,uid=1000,gid=1000,dmask=022,fmask=133 0 0
   ```
+
+### Music Metadata Cleanup
+```bash
+# Preview changes (dry run)
+clean-music-tags
+
+# Apply changes (removes "feat." from artist tags)
+clean-music-tags --apply
+
+# Refresh MPD database after
+mpc update
+```
+
+### Remote Desktop (Windows)
+```bash
+# Connect to Windows machine via RDP
+rdp
+```
+Alias configured in fish: `xfreerdp3 /v:192.168.1.119 /u:taubut@gmail.com /dynamic-resolution`
 
 ### Backup System
 - **Borg Backup** - Script at ~/.local/bin/backup
@@ -183,11 +263,14 @@ See "Restoring from Borg Backup" section below for complete home directory resto
   - KDE configs (plasma-appletsrc, kwinrulesrc)
   - ActiveAccentFrame window decoration
   - Vicinae Catppuccin Macchiato Flamingo theme
+  - Wallust config + templates
 - **Scripts included:**
   - catfetch, backup
   - cava-widget, rmpc-widget
   - catppuccinify, catppuccin-watcher
   - neo-widget, rofi-music, dotfiles-sync
+  - toggle-theme (Catppuccin ↔ Wallust)
+  - clean-music-tags (metadata cleanup)
 
 ## File Locations
 
@@ -211,6 +294,10 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - ~/.local/share/qutebrowser/greasemonkey/SponsorBlock.user.js
 - ~/.config/neo/catppuccin-flamingo.colors
 - ~/.config/rofi/config.rasi
+- ~/.config/wallust/wallust.toml
+- ~/.config/wallust/templates/ (wallust templates)
+- ~/.config/mpv/mpv.conf
+- ~/.config/mpv/scripts/ (uosc, thumbfast)
 
 ### Custom Scripts
 - ~/.local/bin/backup - Borg backup script
@@ -222,6 +309,8 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - ~/.local/bin/catppuccin-watcher - Auto-convert wallpapers dropped in ~/Pictures/Wallpapers
 - ~/.local/bin/neo-widget - Matrix rain that starts/stops with music playback
 - ~/.local/bin/rofi-music - Search and play music via rofi (Ctrl+Alt+Meta+M)
+- ~/.local/bin/toggle-theme - Switch between Catppuccin and Wallust themes
+- ~/.local/bin/clean-music-tags - Remove "feat." from music artist metadata
 
 ### Systemd User Services
 - ~/.config/systemd/user/vicinae.service
@@ -230,6 +319,7 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 ### Themes & Assets
 - ~/Pictures/cat-ascii.txt - Custom cat ASCII for neofetch
 - ~/Pictures/nzxt/catppuccin_logo.svg - Custom Catppuccin logo
+- ~/Pictures/Wallpapers/ - Wallpaper collection (~1000 images)
 
 ## Keyboard Shortcuts
 - **Meta + Space** - Vicinae launcher
@@ -269,6 +359,10 @@ See "Restoring from Borg Backup" section below for complete home directory resto
 - neo-matrix
 - rofi
 - mpc
+- wallust (dynamic theming from wallpapers)
+- freerdp (RDP to Windows)
+- mpv, mpv-mpris
+- python-mutagen (for clean-music-tags)
 
 ## Catppuccin Wallpaper Pipeline
 
