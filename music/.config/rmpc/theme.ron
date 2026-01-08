@@ -157,11 +157,7 @@
             ])
         ),
         (
-            kind: Group([
-                (kind: Property(Artist)),
-                (kind: Text(" - ")),
-                (kind: Property(Title)),
-            ]),
+            kind: Property(Title),
             default: (kind: Property(Filename))
         ),
     ],
