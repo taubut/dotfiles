@@ -1,0 +1,72 @@
+# Wallust-generated Starship Config
+palette = "wallust"
+
+format = """
+[](accent)\
+$directory\
+[](bg:color2 fg:accent)\
+$git_branch\
+$git_status\
+[](bg:color3 fg:color2)\
+$nodejs\
+$rust\
+$python\
+[](bg:base fg:color3)\
+$cmd_duration\
+[ ](fg:base)
+$character"""
+
+[directory]
+style = "bg:accent fg:base"
+format = "[ $path ]($style)"
+truncation_length = 3
+
+[git_branch]
+symbol = ""
+style = "bg:color2 fg:base"
+format = "[ $symbol $branch ]($style)"
+
+[git_status]
+style = "bg:color2 fg:base"
+format = "[$all_status$ahead_behind ]($style)"
+
+[nodejs]
+symbol = ""
+style = "bg:color3 fg:base"
+format = "[ $symbol ($version) ]($style)"
+
+[rust]
+symbol = ""
+style = "bg:color3 fg:base"
+format = "[ $symbol ($version) ]($style)"
+
+[python]
+symbol = ""
+style = "bg:color3 fg:base"
+format = "[ $symbol ($version) ]($style)"
+
+[cmd_duration]
+style = "bg:base fg:text"
+format = "[ 󰔟 $duration ]($style)"
+min_time = 500
+
+[character]
+success_symbol = "[❯](accent)"
+error_symbol = "[❯](red)"
+
+[palettes.wallust]
+accent = "{{color4}}"
+color1 = "{{color1}}"
+color2 = "{{color2}}"
+color3 = "{{color3}}"
+color4 = "{{color4}}"
+color5 = "{{color5}}"
+color6 = "{{color6}}"
+red = "{{color1}}"
+green = "{{color2}}"
+yellow = "{{color3}}"
+blue = "{{color4}}"
+magenta = "{{color5}}"
+cyan = "{{color6}}"
+text = "{{foreground}}"
+base = "{{background}}"

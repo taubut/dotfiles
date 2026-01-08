@@ -1,0 +1,215 @@
+#!/bin/bash
+# =============================================================================
+# Toggle Theme - Switch between Catppuccin and Wallust dynamic theming
+# =============================================================================
+# Usage:
+#   toggle-theme catppuccin          - Restore Catppuccin Macchiato Flamingo
+#   toggle-theme wallust <image>     - Apply wallust colors from image
+#   toggle-theme status              - Show current theme mode
+# =============================================================================
+
+DOTFILES="$HOME/dotfiles"
+STATUS_FILE="$HOME/.config/theme-mode"
+
+restore_catppuccin() {
+    echo "Restoring Catppuccin Macchiato Flamingo theme..."
+
+    # Terminal - Ghostty
+    cp "$DOTFILES/terminal/.config/ghostty/config" "$HOME/.config/ghostty/config"
+    echo "  ✓ Ghostty"
+
+    # Terminal - btop
+    cp "$DOTFILES/terminal/.config/btop/btop.conf" "$HOME/.config/btop/btop.conf"
+    echo "  ✓ btop"
+
+    # Terminal - fresh
+    mkdir -p "$HOME/.config/fresh/themes"
+    cp "$DOTFILES/terminal/.config/fresh/config.json" "$HOME/.config/fresh/config.json"
+    cp "$DOTFILES/terminal/.config/fresh/themes/catppuccin-macchiato.json" "$HOME/.config/fresh/themes/" 2>/dev/null
+    echo "  ✓ fresh"
+
+    # Shell - Starship
+    cp "$DOTFILES/shell/.config/starship.toml" "$HOME/.config/starship.toml"
+    echo "  ✓ Starship"
+
+    # Launcher - Rofi
+    cp "$DOTFILES/launcher/.config/rofi/config.rasi" "$HOME/.config/rofi/config.rasi"
+    echo "  ✓ Rofi"
+
+    # Launcher - Vicinae
+    mkdir -p "$HOME/.config/vicinae"
+    mkdir -p "$HOME/.local/share/vicinae/themes"
+    cp "$DOTFILES/launcher/.config/vicinae/settings.json" "$HOME/.config/vicinae/settings.json"
+    cp "$DOTFILES/launcher/.local/share/vicinae/themes/catppuccin-macchiato-flamingo.toml" "$HOME/.local/share/vicinae/themes/" 2>/dev/null
+    echo "  ✓ Vicinae"
+
+    # Launcher - Walker
+    mkdir -p "$HOME/.config/walker"
+    cp "$DOTFILES/launcher/.config/walker/config.toml" "$HOME/.config/walker/config.toml" 2>/dev/null
+    echo "  ✓ Walker"
+
+    # Music - rmpc
+    cp "$DOTFILES/music/.config/rmpc/theme.ron" "$HOME/.config/rmpc/theme.ron"
+    echo "  ✓ rmpc"
+
+    # Music - cava
+    cp "$DOTFILES/music/.config/cava/config" "$HOME/.config/cava/config"
+    echo "  ✓ cava"
+
+    # Fetch - neofetch
+    cp "$DOTFILES/fetch/.config/neofetch/config.conf" "$HOME/.config/neofetch/config.conf"
+    echo "  ✓ neofetch"
+
+    # Fetch - fastfetch
+    cp "$DOTFILES/fetch/.config/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
+    echo "  ✓ fastfetch"
+
+    # Browser - qutebrowser
+    cp "$DOTFILES/browser/.config/qutebrowser/config.py" "$HOME/.config/qutebrowser/config.py"
+    echo "  ✓ qutebrowser"
+
+    # File Manager - Yazi
+    mkdir -p "$HOME/.config/yazi/flavors/catppuccin-macchiato.yazi"
+    cp "$DOTFILES/yazi/.config/yazi/theme.toml" "$HOME/.config/yazi/theme.toml"
+    cp -r "$DOTFILES/yazi/.config/yazi/flavors/catppuccin-macchiato.yazi/"* "$HOME/.config/yazi/flavors/catppuccin-macchiato.yazi/" 2>/dev/null
+    echo "  ✓ Yazi"
+
+    # KDE - Conky
+    cp "$DOTFILES/kde/.config/conky/conky.conf" "$HOME/.config/conky/conky.conf" 2>/dev/null
+    echo "  ✓ Conky"
+
+    # Niri (if installed)
+    if [ -d "$HOME/.config/niri" ]; then
+        cp "$DOTFILES/niri/.config/niri/config.kdl" "$HOME/.config/niri/config.kdl" 2>/dev/null
+        echo "  ✓ Niri"
+    fi
+
+    # Restore KDE accent color to Catppuccin Flamingo
+    plasma-apply-colorscheme --accent-color "#f0c6c6" 2>/dev/null
+    echo "  ✓ KDE accent color"
+
+    # Save status
+    echo "catppuccin" > "$STATUS_FILE"
+
+    echo ""
+    echo "Reloading apps..."
+
+    # Reload Ghostty (config file watcher triggers reload)
+    if pgrep -x ghostty >/dev/null; then
+        sleep 0.2  # Brief delay to ensure file is written
+        echo "  ✓ Ghostty (auto-reloads on config change)"
+    fi
+
+    # Reload qutebrowser (if running)
+    if pgrep -x qutebrowser >/dev/null; then
+        qutebrowser ":config-source" 2>/dev/null && echo "  ✓ qutebrowser reloaded"
+    fi
+
+    # Reload cava (restart it)
+    if pgrep -x cava >/dev/null; then
+        pkill cava && sleep 0.5 && cava &>/dev/null &
+        echo "  ✓ cava restarted"
+    fi
+
+    # Reload conky (if running)
+    if pgrep -x conky >/dev/null; then
+        pkill conky && sleep 0.5 && conky &>/dev/null &
+        echo "  ✓ conky restarted"
+    fi
+
+    # rmpc auto-reloads via config setting
+
+    echo ""
+    echo "Theme restored!"
+}
+
+apply_wallust() {
+    local IMAGE="$1"
+
+    if [ -z "$IMAGE" ]; then
+        echo "Error: No image specified"
+        echo "Usage: toggle-theme wallust /path/to/image.jpg"
+        exit 1
+    fi
+
+    if [ ! -f "$IMAGE" ]; then
+        echo "Error: Image not found: $IMAGE"
+        exit 1
+    fi
+
+    echo "Applying wallust theme from: $IMAGE"
+    wallust run "$IMAGE"
+
+    # Fix conky colors (strip # from hex values - conky needs colors without #)
+    sed -i "s/default_color = '#\([^']*\)'/default_color = '\1'/g" "$HOME/.config/conky/conky.conf"
+    sed -i "s/color1 = '#\([^']*\)'/color1 = '\1'/g" "$HOME/.config/conky/conky.conf"
+    sed -i "s/color2 = '#\([^']*\)'/color2 = '\1'/g" "$HOME/.config/conky/conky.conf"
+    sed -i "s/color3 = '#\([^']*\)'/color3 = '\1'/g" "$HOME/.config/conky/conky.conf"
+    sed -i "s/own_window_colour = '#\([^']*\)'/own_window_colour = '\1'/g" "$HOME/.config/conky/conky.conf"
+
+    # Set wallpaper on main display only (KDE Plasma - screen 0)
+    # Note: KDE's "accent color from wallpaper" setting handles window decoration colors automatically
+    echo "  Setting wallpaper..."
+    qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
+        var d = desktops().filter(d => d.screen === 0)[0];
+        d.wallpaperPlugin = 'org.kde.image';
+        d.currentConfigGroup = ['Wallpaper', 'org.kde.image', 'General'];
+        d.writeConfig('Image', 'file://$IMAGE');
+    " 2>/dev/null && echo "  ✓ Wallpaper set (main display only)"
+
+    # Switch btop to use wallust theme
+    sed -i 's/color_theme = ".*"/color_theme = "wallust"/' "$HOME/.config/btop/btop.conf"
+
+    # Switch Vicinae to use wallust theme
+    sed -i 's/"name": ".*"/"name": "wallust"/' "$HOME/.config/vicinae/settings.json"
+
+    # Save status
+    echo "wallust" > "$STATUS_FILE"
+
+    echo ""
+    echo "Reloading apps..."
+
+    # Reload cava (restart it)
+    if pgrep -x cava >/dev/null; then
+        pkill cava && sleep 0.5 && cava &>/dev/null &
+        echo "  ✓ cava restarted"
+    fi
+
+    # Reload conky (if running)
+    if pgrep -x conky >/dev/null; then
+        pkill conky && sleep 0.5 && conky &>/dev/null &
+        echo "  ✓ conky restarted"
+    fi
+
+    echo ""
+    echo "Wallust theme applied!"
+}
+
+show_status() {
+    if [ -f "$STATUS_FILE" ]; then
+        echo "Current theme: $(cat "$STATUS_FILE")"
+    else
+        echo "Current theme: catppuccin (default)"
+    fi
+}
+
+# Main
+case "$1" in
+    catppuccin|cat|c)
+        restore_catppuccin
+        ;;
+    wallust|wal|w)
+        apply_wallust "$2"
+        ;;
+    status|s)
+        show_status
+        ;;
+    *)
+        echo "Toggle Theme - Switch between Catppuccin and Wallust"
+        echo ""
+        echo "Usage:"
+        echo "  toggle-theme catppuccin       - Restore Catppuccin theme"
+        echo "  toggle-theme wallust <image>  - Apply wallust from image"
+        echo "  toggle-theme status           - Show current theme"
+        ;;
+esac
