@@ -1,0 +1,85 @@
+# Wallust generated btop theme
+
+# Main background
+theme[main_bg]="#110011"
+
+# Main text color
+theme[main_fg]="#FFF9CC"
+
+# Title color for boxes
+theme[title]="#FFF9CC"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#B9ADDF"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#ADA779"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#B9ADDF"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#ADA779"
+
+# Color of text appearing on top of graphs
+theme[graph_text]="#FFF9CC"
+
+# Background color of the percentage meters
+theme[meter_bg]="#ADA779"
+
+# Misc colors for processes box
+theme[proc_misc]="#B9ADDF"
+
+# Box outline colors
+theme[cpu_box]="#16D0CF"
+theme[mem_box]="#FA4D29"
+theme[net_box]="#477170"
+theme[proc_box]="#B9ADDF"
+
+# Box divider line
+theme[div_line]="#ADA779"
+
+# Temperature graph colors
+theme[temp_start]="#FA4D29"
+theme[temp_mid]="#AD9882"
+theme[temp_end]="#477170"
+
+# CPU graph colors
+theme[cpu_start]="#FFEE6D"
+theme[cpu_mid]="#B9ADDF"
+theme[cpu_end]="#16D0CF"
+
+# Mem/Disk free meter
+theme[free_start]="#16D0CF"
+theme[free_mid]="#B9ADDF"
+theme[free_end]="#B9ADDF"
+
+# Mem/Disk cached meter
+theme[cached_start]="#B9ADDF"
+theme[cached_mid]="#B9ADDF"
+theme[cached_end]="#FA4D29"
+
+# Mem/Disk available meter
+theme[available_start]="#FA4D29"
+theme[available_mid]="#AD9882"
+theme[available_end]="#AD9882"
+
+# Mem/Disk used meter
+theme[used_start]="#FA4D29"
+theme[used_mid]="#AD9882"
+theme[used_end]="#477170"
+
+# Download graph colors
+theme[download_start]="#FFEE6D"
+theme[download_mid]="#FFEE6D"
+theme[download_end]="#16D0CF"
+
+# Upload graph colors
+theme[upload_start]="#FA4D29"
+theme[upload_mid]="#FA4D29"
+theme[upload_end]="#477170"
+
+# Process box gradient for threads, mem and cpu usage
+theme[process_start]="#B9ADDF"
+theme[process_mid]="#16D0CF"
+theme[process_end]="#477170"

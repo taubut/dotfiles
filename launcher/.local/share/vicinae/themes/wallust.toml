@@ -1,0 +1,32 @@
+# Wallust generated Vicinae theme
+
+[meta]
+version = 1
+name = "Wallust"
+description = "Dynamic colors from wallpaper"
+variant = "dark"
+
+[colors.core]
+background = "#110011"
+foreground = "#FFF9CC"
+secondary_background = "#110011"
+border = "#ADA779"
+accent = "#B9ADDF"
+
+[colors.accents]
+blue = "#B9ADDF"
+green = "#FA4D29"
+magenta = "#16D0CF"
+orange = "#AD9882"
+purple = "#16D0CF"
+red = "#477170"
+yellow = "#AD9882"
+cyan = "#FFEE6D"
+
+[colors.list.item.selection]
+background = { name = "#B9ADDF", opacity = 0.3 }
+secondary_background = "#ADA779"
+foreground = "#B9ADDF"
+
+[colors.list.item.hover]
+background = { name = "#B9ADDF", opacity = 0.15 }
