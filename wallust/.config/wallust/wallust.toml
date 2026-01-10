@@ -51,3 +51,4 @@ btop = { template = 'btop-wallust.theme', target = '~/.config/btop/themes/wallus
 vicinae = { template = 'vicinae-wallust.toml', target = '~/.local/share/vicinae/themes/wallust.toml' }
 conky = { template = 'conky.conf', target = '~/.config/conky/conky.conf', new_engine = true }
 yazi = { template = 'yazi-theme.toml', target = '~/.config/yazi/theme.toml' }
+xresources = { template = 'xresources', target = '~/.Xresources' }

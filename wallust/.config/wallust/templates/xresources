@@ -1,0 +1,8 @@
+! Wallust generated Xresources
+
+! nsxiv colors
+Nsxiv.window.background: {{background}}
+Nsxiv.window.foreground: {{foreground}}
+Nsxiv.bar.background: {{color0}}
+Nsxiv.bar.foreground: {{foreground}}
+Nsxiv.mark.foreground: {{color4}}

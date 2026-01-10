@@ -88,6 +88,11 @@ restore_catppuccin() {
     plasma-apply-colorscheme --accent-color "#f0c6c6" 2>/dev/null
     echo "  ✓ KDE accent color"
 
+    # Xresources for nsxiv
+    cp "$DOTFILES/wallust/.config/wallust/catppuccin-xresources" "$HOME/.Xresources"
+    xrdb -merge "$HOME/.Xresources"
+    echo "  ✓ Xresources (nsxiv)"
+
     # Save status
     echo "catppuccin" > "$STATUS_FILE"
 
@@ -139,6 +144,9 @@ apply_wallust() {
 
     echo "Applying wallust theme from: $IMAGE"
     wallust run "$IMAGE"
+
+    # Load Xresources for nsxiv theming
+    [ -f "$HOME/.Xresources" ] && xrdb -merge "$HOME/.Xresources"
 
     # Fix conky colors (strip # from hex values - conky needs colors without #)
     sed -i "s/default_color = '#\([^']*\)'/default_color = '\1'/g" "$HOME/.config/conky/conky.conf"

@@ -1,0 +1,19 @@
+#!/bin/bash
+# Wallpaper picker - browse wallpapers visually and apply with wallust
+
+WALLPAPER_DIR="${1:-$HOME/Pictures/Wallpapers}"
+
+# Check if directory exists
+if [[ ! -d "$WALLPAPER_DIR" ]]; then
+    echo "Wallpaper directory not found: $WALLPAPER_DIR"
+    exit 1
+fi
+
+# Open nsxiv in thumbnail mode, output selected file
+selected=$(nsxiv -t -o "$WALLPAPER_DIR" 2>/dev/null | head -1)
+
+# If user selected something, apply it
+if [[ -n "$selected" ]]; then
+    echo "Applying: $selected"
+    toggle-theme wallust "$selected"
+fi

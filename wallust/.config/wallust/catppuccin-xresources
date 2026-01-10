@@ -1,0 +1,8 @@
+! Catppuccin Macchiato Xresources
+
+! nsxiv colors
+Nsxiv.window.background: #24273a
+Nsxiv.window.foreground: #cad3f5
+Nsxiv.bar.background: #1e2030
+Nsxiv.bar.foreground: #cad3f5
+Nsxiv.mark.foreground: #f0c6c6
