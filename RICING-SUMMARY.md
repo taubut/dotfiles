@@ -382,6 +382,37 @@ Drop wallpapers into these folders and they'll auto-convert:
 
 The `catppuccin-watcher` service runs automatically on login.
 
+## Troubleshooting
+
+### Python Version Upgrade Breaks Packages
+CachyOS is bleeding edge and sometimes updates Python (e.g., 3.13 → 3.14) before all packages are rebuilt. This causes errors like:
+```
+ModuleNotFoundError: No module named 'packagename'
+PackageNotFoundError: No package metadata was found for packagename
+```
+
+**Fix: Symlink the old packages temporarily**
+```bash
+# 1. Find packages still in old Python version
+ls /usr/lib/python3.13/site-packages/
+
+# 2. Check what's missing from new version
+comm -23 <(ls /usr/lib/python3.13/site-packages/ | sort) <(ls /usr/lib/python3.14/site-packages/ | sort)
+
+# 3. Symlink missing packages (example for faugus)
+sudo ln -s /usr/lib/python3.13/site-packages/faugus /usr/lib/python3.14/site-packages/
+
+# 4. Also symlink the dist-info if present
+sudo ln -s /usr/lib/python3.13/site-packages/faugus-1.0.0.dist-info /usr/lib/python3.14/site-packages/
+```
+
+These symlinks will work until the package is rebuilt for the new Python version, at which point pacman will cleanly replace them.
+
+**Alternative: Downgrade Python**
+Only works if you catch it early before other packages are rebuilt for the new version. Otherwise creates different dependency conflicts.
+
+---
+
 ## Future Enhancements (To Check Out Later)
 
 ### Terminal QoL Tools
