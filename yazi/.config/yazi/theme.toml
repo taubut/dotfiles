@@ -1,28 +1,28 @@
 # Wallust generated Yazi theme
 
 [mgr]
-cwd = { fg = "#B9ADDF" }
+cwd = { fg = "#62564D" }
 
 [tabs]
-active   = { fg = "#110011", bg = "#B9ADDF", bold = true }
-inactive = { fg = "#B9ADDF", bg = "#ADA779" }
+active   = { fg = "#47413F", bg = "#62564D", bold = true }
+inactive = { fg = "#62564D", bg = "#AC957A" }
 
 [mode]
-normal_main = { fg = "#110011", bg = "#B9ADDF", bold = true }
-normal_alt  = { fg = "#B9ADDF", bg = "#ADA779" }
+normal_main = { fg = "#47413F", bg = "#62564D", bold = true }
+normal_alt  = { fg = "#62564D", bg = "#AC957A" }
 
 [filetype]
 rules = [
     # Folders - accent color
-    { name = "*/", fg = "#B9ADDF" },
+    { name = "*/", fg = "#62564D" },
     # Image
-    { mime = "image/*", fg = "#FFEE6D" },
+    { mime = "image/*", fg = "#FEBC6E" },
     # Media
-    { mime = "{audio,video}/*", fg = "#AD9882" },
+    { mime = "{audio,video}/*", fg = "#952D12" },
     # Archive
-    { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#16D0CF" },
+    { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#C17134" },
     # Document
-    { mime = "application/{pdf,doc,rtf}", fg = "#FA4D29" },
+    { mime = "application/{pdf,doc,rtf}", fg = "#1F312E" },
     # Fallback
-    { name = "*", fg = "#FFF9CC" },
+    { name = "*", fg = "#FFE8CC" },
 ]
