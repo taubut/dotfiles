@@ -34,5 +34,23 @@
         "output_symbol": "Control_L + Super_L + Alt_L + M",
         "name": "Rofi-Music",
         "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 29,
+                "origin_hash": "478c830484b6ca86f18591f6a3fcca53"
+            },
+            {
+                "type": 1,
+                "code": 47,
+                "origin_hash": "478c830484b6ca86f18591f6a3fcca53"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_LEFTCTRL + Alt_L + KEY_LEFTMETA + W",
+        "name": "Wallpaper",
+        "mapping_type": "key_macro"
     }
 ]

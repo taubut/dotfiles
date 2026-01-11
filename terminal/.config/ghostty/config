@@ -5,23 +5,23 @@ window-width = 120
 window-height = 35
 
 # Colors from wallpaper
-background = #1F1B19
-foreground = #FFE8CC
+background = #1C211E
+foreground = #EDEAE0
 
 # 16 color palette
-palette = 0=#47413F
-palette = 1=#2C160B
-palette = 2=#1F312E
-palette = 3=#952D12
-palette = 4=#62564D
-palette = 5=#C17134
-palette = 6=#FEBC6E
-palette = 7=#F6D5AE
-palette = 8=#AC957A
-palette = 9=#2C160B
-palette = 10=#1F312E
-palette = 11=#952D12
-palette = 12=#62564D
-palette = 13=#C17134
-palette = 14=#FEBC6E
-palette = 15=#F6D5AE
+palette = 0=#424844
+palette = 1=#275577
+palette = 2=#6A654C
+palette = 3=#B75844
+palette = 4=#7098A5
+palette = 5=#FF8C01
+palette = 6=#CCC4A7
+palette = 7=#DDD9CB
+palette = 8=#9B988E
+palette = 9=#275577
+palette = 10=#6A654C
+palette = 11=#B75844
+palette = 12=#7098A5
+palette = 13=#FF8C01
+palette = 14=#CCC4A7
+palette = 15=#DDD9CB

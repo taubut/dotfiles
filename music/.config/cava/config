@@ -10,15 +10,15 @@ sdl_width = 1000
 sdl_height = 400
 
 [color]
-background = '#1F1B19'
+background = '#1C211E'
 
 gradient = 1
 
-gradient_color_1 = '#2C160B'
-gradient_color_2 = '#1F312E'
-gradient_color_3 = '#952D12'
-gradient_color_4 = '#62564D'
-gradient_color_5 = '#C17134'
-gradient_color_6 = '#FEBC6E'
-gradient_color_7 = '#62564D'
-gradient_color_8 = '#C17134'
+gradient_color_1 = '#275577'
+gradient_color_2 = '#6A654C'
+gradient_color_3 = '#B75844'
+gradient_color_4 = '#7098A5'
+gradient_color_5 = '#FF8C01'
+gradient_color_6 = '#CCC4A7'
+gradient_color_7 = '#7098A5'
+gradient_color_8 = '#FF8C01'

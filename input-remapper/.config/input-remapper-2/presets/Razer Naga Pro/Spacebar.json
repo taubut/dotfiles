@@ -1,0 +1,15 @@
+[
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 12,
+                "origin_hash": "22d9461abf9df813a2ed84574e0413b7"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_SPACE",
+        "name": "Spacebar",
+        "mapping_type": "key_macro"
+    }
+]

@@ -6,11 +6,11 @@ configuration {
 
 /* Wallust generated - dmenu style */
 * {
-    bg: #1F1B19;
-    bg-alt: #47413F;
-    fg: #FFE8CC;
-    fg-alt: #AC957A;
-    accent: #62564D;
+    bg: #1C211E;
+    bg-alt: #424844;
+    fg: #EDEAE0;
+    fg-alt: #9B988E;
+    accent: #7098A5;
 
     background-color: @bg;
     text-color: @fg;

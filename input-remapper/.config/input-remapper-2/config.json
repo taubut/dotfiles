@@ -2,6 +2,7 @@
     "version": "2.2.0",
     "autoload": {
         "Keychron  Keychron Link ": "NumLock",
-        "INSTANT USB GAMING MOUSE ": "NumLock"
+        "INSTANT USB GAMING MOUSE ": "NumLock",
+        "Razer Naga Pro": "Spacebar"
     }
 }
