@@ -7,8 +7,8 @@ ignore-article "*" "link =~ \"/shorts/\""
 auto-reload yes
 reload-time 30
 reload-threads 4
-show-read-feeds no
-show-read-articles no
+show-read-feeds yes
+show-read-articles yes
 
 # Keybindings (vim-style)
 bind-key j down
@@ -52,5 +52,11 @@ highlight article "\\[[0-9]+\\]" color6 default bold
 highlight article "https?://[^ ]+" color14 default underline
 
 # Format strings
-feedlist-format "%4i %n %11u %t"
+# %n shows notify-format character if unread, %u is unread count
+feedlist-format "%?n?🔔&  ? %u %t"
 articlelist-format "%4i %f %D  %?T?|%-17T|  ?%t"
+
+# Unread indicator character
+feedlist-title-format "%u feeds with new articles"
+notify-screen yes
+notify-program ""

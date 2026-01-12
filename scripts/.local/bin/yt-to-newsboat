@@ -1,0 +1,32 @@
+#!/bin/bash
+# Grab YouTube channel ID and format for newsboat
+# Usage: yt-to-newsboat "Channel Name" @handle
+#    or: yt-to-newsboat "Channel Name" https://www.youtube.com/@handle
+
+CHANNEL_NAME="$1"
+URL="$2"
+
+if [[ -z "$CHANNEL_NAME" || -z "$URL" ]]; then
+    echo "Usage: yt-to-newsboat \"Channel Name\" @handle"
+    echo "   or: yt-to-newsboat \"Channel Name\" https://www.youtube.com/@handle"
+    exit 1
+fi
+
+# Handle @handle format
+if [[ "$URL" == @* ]]; then
+    URL="https://www.youtube.com/$URL"
+fi
+
+# Fetch the page and extract channel ID
+CHANNEL_ID=$(curl -s "$URL" | grep -oP 'channel_id=\K[^"&]+' | head -1)
+
+if [[ -z "$CHANNEL_ID" ]]; then
+    CHANNEL_ID=$(curl -s "$URL" | grep -oP '"externalId":"[^"]+"' | head -1 | cut -d'"' -f4)
+fi
+
+if [[ -z "$CHANNEL_ID" ]]; then
+    echo "Could not find channel ID for $URL" >&2
+    exit 1
+fi
+
+echo "https://www.youtube.com/feeds/videos.xml?channel_id=$CHANNEL_ID \"~$CHANNEL_NAME\" youtube"
