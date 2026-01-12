@@ -4,13 +4,13 @@ configuration {
     font: "JetBrainsMono Nerd Font 12";
 }
 
-/* Wallust generated - dmenu style */
+/* Catppuccin Macchiato Flamingo - dmenu style */
 * {
-    bg: #1C211E;
-    bg-alt: #424844;
-    fg: #EDEAE0;
-    fg-alt: #9B988E;
-    accent: #7098A5;
+    bg: #24273a;
+    bg-alt: #1e2030;
+    fg: #cad3f5;
+    fg-alt: #6e738d;
+    accent: #f0c6c6;
 
     background-color: @bg;
     text-color: @fg;

@@ -1,19 +1,20 @@
 #!/bin/bash
 # Auto-sync dotfiles to GitHub (GNU Stow structure)
+# NOTE: Theme files are EXCLUDED - they are managed by toggle-theme script
 
 DOTFILES=~/dotfiles
 
 # ─── Shell Package ───
 mkdir -p "$DOTFILES/shell/.config/fish"
 cp -r ~/.config/fish/* "$DOTFILES/shell/.config/fish/" 2>/dev/null
-cp ~/.config/starship.toml "$DOTFILES/shell/.config/" 2>/dev/null
+# SKIP starship.toml - theme file managed by toggle-theme
 
 # ─── Terminal Package ───
 mkdir -p "$DOTFILES/terminal/.config/ghostty"
 mkdir -p "$DOTFILES/terminal/.config/btop"
 mkdir -p "$DOTFILES/terminal/.config/fresh"
-cp -r ~/.config/ghostty/* "$DOTFILES/terminal/.config/ghostty/" 2>/dev/null
-cp -r ~/.config/btop/* "$DOTFILES/terminal/.config/btop/" 2>/dev/null
+# SKIP ghostty/config - theme file managed by toggle-theme
+# SKIP btop/btop.conf - theme file managed by toggle-theme
 cp -r ~/.config/fresh/* "$DOTFILES/terminal/.config/fresh/" 2>/dev/null
 
 # ─── Fetch Package ───
@@ -27,10 +28,11 @@ mkdir -p "$DOTFILES/music/.config/cava"
 mkdir -p "$DOTFILES/music/.config/mpd"
 mkdir -p "$DOTFILES/music/.config/rmpc"
 mkdir -p "$DOTFILES/music/.config/neo"
-cp -r ~/.config/cava/* "$DOTFILES/music/.config/cava/" 2>/dev/null
+# SKIP cava/config - theme file managed by toggle-theme
 cp -r ~/.config/mpd/* "$DOTFILES/music/.config/mpd/" 2>/dev/null
-cp -r ~/.config/rmpc/* "$DOTFILES/music/.config/rmpc/" 2>/dev/null
-cp -r ~/.config/neo/* "$DOTFILES/music/.config/neo/" 2>/dev/null
+# SKIP rmpc/theme.ron - theme file managed by toggle-theme
+cp ~/.config/rmpc/config.ron "$DOTFILES/music/.config/rmpc/" 2>/dev/null
+# SKIP neo/catppuccin-flamingo.colors - theme file managed by toggle-theme
 
 # ─── Browser Package (qutebrowser) ───
 mkdir -p "$DOTFILES/browser/.config/qutebrowser"
@@ -43,7 +45,7 @@ cp -r ~/.local/share/qutebrowser/greasemonkey/* "$DOTFILES/browser/.local/share/
 mkdir -p "$DOTFILES/launcher/.config/rofi"
 mkdir -p "$DOTFILES/launcher/.config/vicinae"
 mkdir -p "$DOTFILES/launcher/.local/share/vicinae/themes"
-cp ~/.config/rofi/config.rasi "$DOTFILES/launcher/.config/rofi/" 2>/dev/null
+# SKIP rofi/config.rasi - theme file managed by toggle-theme
 cp -r ~/.config/vicinae/* "$DOTFILES/launcher/.config/vicinae/" 2>/dev/null
 cp -r ~/.local/share/vicinae/themes/* "$DOTFILES/launcher/.local/share/vicinae/themes/" 2>/dev/null
 
@@ -53,7 +55,7 @@ mkdir -p "$DOTFILES/kde/.config/systemd/user"
 mkdir -p "$DOTFILES/kde/.local/share/aurorae/themes"
 cp ~/.config/plasma-org.kde.plasma.desktop-appletsrc "$DOTFILES/kde/.config/" 2>/dev/null
 cp ~/.config/kwinrulesrc "$DOTFILES/kde/.config/" 2>/dev/null
-cp -r ~/.config/conky/* "$DOTFILES/kde/.config/conky/" 2>/dev/null
+# SKIP conky/conky.conf - theme file managed by toggle-theme
 cp ~/.config/systemd/user/catppuccin-watcher.service "$DOTFILES/kde/.config/systemd/user/" 2>/dev/null
 cp ~/.config/systemd/user/vicinae.service "$DOTFILES/kde/.config/systemd/user/" 2>/dev/null
 rsync -a --exclude='.git' ~/.local/share/aurorae/themes/ActiveAccentFrame/ "$DOTFILES/kde/.local/share/aurorae/themes/ActiveAccentFrame/" 2>/dev/null
@@ -70,6 +72,9 @@ cp ~/.local/bin/neo-widget "$DOTFILES/scripts/.local/bin/" 2>/dev/null
 cp ~/.local/bin/rmpc-widget "$DOTFILES/scripts/.local/bin/" 2>/dev/null
 cp ~/.local/bin/rofi-music "$DOTFILES/scripts/.local/bin/" 2>/dev/null
 cp ~/.local/bin/dotfiles-sync "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/toggle-theme "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/wallpaper-picker "$DOTFILES/scripts/.local/bin/" 2>/dev/null
+cp ~/.local/bin/yt-to-newsboat "$DOTFILES/scripts/.local/bin/" 2>/dev/null
 cp ~/.local/share/applications/rofi-music.desktop "$DOTFILES/scripts/.local/share/applications/" 2>/dev/null
 
 # ─── Assets Package ───
@@ -80,8 +85,8 @@ cp ~/Pictures/nzxt/catppuccin_logo.ans "$DOTFILES/assets/Pictures/nzxt/" 2>/dev/
 
 # ─── Yazi Package ───
 mkdir -p "$DOTFILES/yazi/.config/yazi"
-# Copy yazi config but exclude .git submodules in flavors
-rsync -a --exclude='.git' ~/.config/yazi/ "$DOTFILES/yazi/.config/yazi/" 2>/dev/null
+# Copy yazi config but exclude .git submodules in flavors AND theme.toml (managed by toggle-theme)
+rsync -a --exclude='.git' --exclude='theme.toml' ~/.config/yazi/ "$DOTFILES/yazi/.config/yazi/" 2>/dev/null
 
 # ─── yt-dlp Package ───
 mkdir -p "$DOTFILES/yt-dlp/.config/yt-dlp"
@@ -94,6 +99,11 @@ cp -r ~/.config/input-remapper-2/* "$DOTFILES/input-remapper/.config/input-remap
 # ─── Niri Package ───
 mkdir -p "$DOTFILES/niri/.config/niri"
 cp ~/.config/niri/config.kdl "$DOTFILES/niri/.config/niri/" 2>/dev/null
+
+# ─── Newsboat Package ───
+mkdir -p "$DOTFILES/newsboat/.newsboat"
+cp ~/.newsboat/config "$DOTFILES/newsboat/.newsboat/" 2>/dev/null
+cp ~/.newsboat/urls "$DOTFILES/newsboat/.newsboat/" 2>/dev/null
 
 # Commit and push if there are changes
 cd "$DOTFILES"
