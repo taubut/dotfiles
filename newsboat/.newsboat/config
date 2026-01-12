@@ -1,0 +1,56 @@
+# Newsboat config - Catppuccin Macchiato theme
+
+# Filter out YouTube Shorts
+ignore-article "*" "link =~ \"/shorts/\""
+
+# General settings
+auto-reload yes
+reload-time 30
+reload-threads 4
+show-read-feeds no
+show-read-articles no
+
+# Keybindings (vim-style)
+bind-key j down
+bind-key k up
+bind-key J next-feed articlelist
+bind-key K prev-feed articlelist
+bind-key G end
+bind-key g home
+bind-key l open
+bind-key h quit
+bind-key u show-urls
+bind-key n next-unread
+bind-key N prev-unread
+bind-key a toggle-article-read
+bind-key U show-urls
+
+# Browser
+browser "qutebrowser %u"
+
+# Macros (press , then the key)
+macro o open-in-browser
+macro v set browser "mpv %u" ; open-in-browser ; set browser "qutebrowser %u" -- "Play video in mpv"
+macro i set browser "curl -s %u | grep -oP 'https://i\.(redd\.it|imgur\.com)/[^\"]+' | head -1 | xargs nsxiv -a" ; open-in-browser ; set browser "qutebrowser %u" -- "View image"
+
+# Catppuccin Macchiato colors
+color background          color7   default
+color listnormal          color7   default
+color listnormal_unread   color4   default bold
+color listfocus           color0   color4
+color listfocus_unread    color0   color4  bold
+color info                color0   color5
+color article             color7   default
+
+# Highlight rules
+highlight article "^Feed:.*" color5 default bold
+highlight article "^Title:.*" color4 default bold
+highlight article "^Author:.*" color6 default
+highlight article "^Date:.*" color7 default
+highlight article "^Link:.*" color14 default
+highlight article "\\[[0-9]+\\]" color6 default bold
+highlight article "https?://[^ ]+" color14 default underline
+
+# Format strings
+feedlist-format "%4i %n %11u %t"
+articlelist-format "%4i %f %D  %?T?|%-17T|  ?%t"
