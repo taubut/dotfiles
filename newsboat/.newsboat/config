@@ -1,7 +1,10 @@
 # Newsboat config - Catppuccin Macchiato theme
 
-# Filter out YouTube Shorts
+# Filter out YouTube Shorts (best effort - not all shorts are caught)
 ignore-article "*" "link =~ \"/shorts/\""
+ignore-article "*" "title =~ \"#shorts\""
+ignore-article "*" "title =~ \"#Shorts\""
+ignore-article "*" "title =~ \"#SHORT\""
 
 # General settings
 auto-reload yes
