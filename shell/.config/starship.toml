@@ -1,48 +1,48 @@
-# Wallust-generated Starship Config
-palette = "wallust"
+# Catppuccin Macchiato Starship Config
+palette = "catppuccin_macchiato"
 
 format = """
-[](accent)\
+[](flamingo)\
 $directory\
-[](bg:color2 fg:accent)\
+[](bg:peach fg:flamingo)\
 $git_branch\
 $git_status\
-[](bg:color3 fg:color2)\
+[](bg:yellow fg:peach)\
 $nodejs\
 $rust\
 $python\
-[](bg:base fg:color3)\
+[](bg:base fg:yellow)\
 $cmd_duration\
 [ ](fg:base)
 $character"""
 
 [directory]
-style = "bg:accent fg:base"
+style = "bg:flamingo fg:base"
 format = "[ $path ]($style)"
 truncation_length = 3
 
 [git_branch]
 symbol = ""
-style = "bg:color2 fg:base"
+style = "bg:peach fg:base"
 format = "[ $symbol $branch ]($style)"
 
 [git_status]
-style = "bg:color2 fg:base"
+style = "bg:peach fg:base"
 format = "[$all_status$ahead_behind ]($style)"
 
 [nodejs]
 symbol = ""
-style = "bg:color3 fg:base"
+style = "bg:yellow fg:base"
 format = "[ $symbol ($version) ]($style)"
 
 [rust]
 symbol = ""
-style = "bg:color3 fg:base"
+style = "bg:yellow fg:base"
 format = "[ $symbol ($version) ]($style)"
 
 [python]
 symbol = ""
-style = "bg:color3 fg:base"
+style = "bg:yellow fg:base"
 format = "[ $symbol ($version) ]($style)"
 
 [cmd_duration]
@@ -51,22 +51,33 @@ format = "[ 󰔟 $duration ]($style)"
 min_time = 500
 
 [character]
-success_symbol = "[❯](accent)"
+success_symbol = "[❯](flamingo)"
 error_symbol = "[❯](red)"
 
-[palettes.wallust]
-accent = "#7098A5"
-color1 = "#275577"
-color2 = "#6A654C"
-color3 = "#B75844"
-color4 = "#7098A5"
-color5 = "#FF8C01"
-color6 = "#CCC4A7"
-red = "#275577"
-green = "#6A654C"
-yellow = "#B75844"
-blue = "#7098A5"
-magenta = "#FF8C01"
-cyan = "#CCC4A7"
-text = "#EDEAE0"
-base = "#1C211E"
+[palettes.catppuccin_macchiato]
+rosewater = "#f4dbd6"
+flamingo = "#f0c6c6"
+pink = "#f5bde6"
+mauve = "#c6a0f6"
+red = "#ed8796"
+maroon = "#ee99a0"
+peach = "#f5a97f"
+yellow = "#eed49f"
+green = "#a6da95"
+teal = "#8bd5ca"
+sky = "#91d7e3"
+sapphire = "#7dc4e4"
+blue = "#8aadf4"
+lavender = "#b7bdf8"
+text = "#cad3f5"
+subtext1 = "#b8c0e0"
+subtext0 = "#a5adcb"
+overlay2 = "#939ab7"
+overlay1 = "#8087a2"
+overlay0 = "#6e738d"
+surface2 = "#5b6078"
+surface1 = "#494d64"
+surface0 = "#363a4f"
+base = "#24273a"
+mantle = "#1e2030"
+crust = "#181926"
