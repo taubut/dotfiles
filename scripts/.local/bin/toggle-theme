@@ -93,11 +93,6 @@ restore_catppuccin() {
     xrdb -merge "$HOME/.Xresources"
     echo "  ✓ Xresources (nsxiv)"
 
-    # neo-matrix
-    mkdir -p "$HOME/.config/neo-matrix"
-    cp "$DOTFILES/terminal/.config/neo-matrix/catppuccin-macchiato.color" "$HOME/.config/neo-matrix/colors.color"
-    echo "  ✓ neo-matrix"
-
     # Save status
     echo "catppuccin" > "$STATUS_FILE"
 
@@ -152,19 +147,6 @@ apply_wallust() {
 
     # Load Xresources for nsxiv theming
     [ -f "$HOME/.Xresources" ] && xrdb -merge "$HOME/.Xresources"
-
-    # Convert neo-matrix colors from 0-255 to 0-1000 scale
-    if [ -f "$HOME/.config/neo-matrix/wallust.color" ]; then
-        awk '{
-            if (/^16,/) {
-                split($0, parts, ",")
-                printf "16, %d, %d, %d\n", parts[2]*3.92, parts[3]*3.92, parts[4]*3.92
-            } else {
-                print
-            }
-        }' "$HOME/.config/neo-matrix/wallust.color" > "$HOME/.config/neo-matrix/colors.color"
-        echo "  ✓ neo-matrix colors converted"
-    fi
 
     # Fix conky colors (strip # from hex values - conky needs colors without #)
     sed -i "s/default_color = '#\([^']*\)'/default_color = '\1'/g" "$HOME/.config/conky/conky.conf"

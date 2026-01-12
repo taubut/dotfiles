@@ -1,30 +1,28 @@
-[flavor]
-use = "catppuccin-macchiato"
+# Wallust generated Yazi theme
 
-# Override with flamingo accents
 [mgr]
-cwd = { fg = "#f0c6c6" }
+cwd = { fg = "#7098A5" }
 
 [tabs]
-active   = { fg = "#24273a", bg = "#f0c6c6", bold = true }
-inactive = { fg = "#f0c6c6", bg = "#363a4f" }
+active   = { fg = "#424844", bg = "#7098A5", bold = true }
+inactive = { fg = "#7098A5", bg = "#9B988E" }
 
 [mode]
-normal_main = { fg = "#24273a", bg = "#f0c6c6", bold = true }
-normal_alt  = { fg = "#f0c6c6", bg = "#363a4f" }
+normal_main = { fg = "#424844", bg = "#7098A5", bold = true }
+normal_alt  = { fg = "#7098A5", bg = "#9B988E" }
 
 [filetype]
 rules = [
-    # Folders - flamingo!
-    { name = "*/", fg = "#f0c6c6" },
+    # Folders - accent color
+    { name = "*/", fg = "#7098A5" },
     # Image
-    { mime = "image/*", fg = "#8bd5ca" },
+    { mime = "image/*", fg = "#CCC4A7" },
     # Media
-    { mime = "{audio,video}/*", fg = "#eed49f" },
+    { mime = "{audio,video}/*", fg = "#B75844" },
     # Archive
-    { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#f5bde6" },
+    { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#FF8C01" },
     # Document
-    { mime = "application/{pdf,doc,rtf}", fg = "#a6da95" },
+    { mime = "application/{pdf,doc,rtf}", fg = "#6A654C" },
     # Fallback
-    { name = "*", fg = "#cad3f5" },
+    { name = "*", fg = "#EDEAE0" },
 ]
