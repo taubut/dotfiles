@@ -37,6 +37,9 @@ alias Su="paru -Syu"  # system update
 # RDP to Windows PC
 alias rdp="xfreerdp3 /v:192.168.1.119 /u:taubut@gmail.com /dynamic-resolution"
 
+# lofi stream picker (Rust TUI with thumbnail previews)
+alias lofi="lofi-tui"
+
 # overwrite greeting with neofetch cat
 function fish_greeting
     neofetch
