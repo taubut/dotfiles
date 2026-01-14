@@ -1,0 +1,1370 @@
+#!/usr/bin/env python3
+"""
+Music Tagger - Unified tool for managing music library metadata
+
+Commands:
+    clean      - Remove "feat." and normalize artist names
+    similar    - Find and fix similar artist names
+    albums     - Find similar album names (different years/editions)
+    duplicates - Find duplicate songs (same artist+album+title)
+    copies     - Find files with (1), (2) in filename
+    missing    - Find files with missing tags
+    genres     - Find artists with inconsistent genres
+    stats      - Show library statistics
+    empty      - Find empty folders
+    rename     - Remove track numbers from filenames
+    art        - Download missing album art
+
+Usage:
+    music-tagger clean                  # Dry run - show what would change
+    music-tagger clean --apply          # Actually apply changes
+    music-tagger similar                # Show similar artists
+    music-tagger similar --apply        # Interactively fix them
+    music-tagger albums                 # Show similar albums
+    music-tagger duplicates             # Show duplicate songs
+    music-tagger duplicates --delete    # Interactively delete duplicates
+    music-tagger copies                 # Show files with (1), (2) etc
+    music-tagger copies --delete        # Interactively delete copies
+    music-tagger missing                # Show files with missing tags
+    music-tagger genres                 # Find inconsistent genres
+    music-tagger genres --apply         # Interactively fix them
+    music-tagger stats                  # Show library statistics
+    music-tagger empty                  # Show empty folders
+    music-tagger empty --delete         # Delete empty folders
+    music-tagger rename                 # Show what would be renamed
+    music-tagger rename --apply         # Actually rename files
+    music-tagger art                    # Show albums missing art
+    music-tagger art --apply            # Download missing album art
+
+    music-tagger <command> --path /some/path  # Use specific directory
+"""
+
+import os
+import sys
+import re
+import json
+import argparse
+import urllib.request
+import urllib.parse
+from pathlib import Path
+from collections import defaultdict
+from difflib import SequenceMatcher
+
+try:
+    from mutagen.easyid3 import EasyID3
+    from mutagen.id3 import ID3NoHeaderError
+    from mutagen.flac import FLAC
+    from mutagen.mp4 import MP4
+    from mutagen.oggvorbis import OggVorbis
+except ImportError:
+    print("Error: mutagen library not found")
+    print("Install with: pip install mutagen")
+    sys.exit(1)
+
+# Config file location
+CONFIG_DIR = Path.home() / '.config' / 'music-tagger'
+CONFIG_FILE = CONFIG_DIR / 'config.json'
+
+EXTENSIONS = {'.mp3', '.flac', '.m4a', '.mp4', '.aac', '.ogg'}
+
+# Patterns to match featuring artists
+FEAT_PATTERNS = [
+    r'\s+feat\.?\s+.*$',
+    r'\s+ft\.?\s+.*$',
+    r'\s+featuring\s+.*$',
+    r'\s*\([^)]*feat[^)]*\)$',
+    r'\s*\([^)]*ft\.?[^)]*\)$',
+    r'\s*\[[^\]]*feat[^\]]*\]$',
+    r'\s*\[[^\]]*ft\.?[^\]]*\]$',
+]
+COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in FEAT_PATTERNS]
+
+
+def get_config():
+    """Load config from file"""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+
+def save_config(config):
+    """Save config to file"""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=2)
+
+
+def get_default_path():
+    """Get default music path from config, or prompt user on first run"""
+    config = get_config()
+    if 'music_path' in config:
+        return config['music_path']
+
+    # First run - ask user for path
+    print("=" * 60)
+    print("Welcome to Music Tagger!")
+    print("=" * 60)
+    print("\nNo music directory configured yet.")
+    print("Please enter the path to your music library.")
+    print("(You can always override this with --path)\n")
+
+    while True:
+        path = input("Music directory path: ").strip()
+        if not path:
+            print("Please enter a path.")
+            continue
+
+        expanded = Path(path).expanduser()
+        if not expanded.exists():
+            print(f"Path does not exist: {expanded}")
+            choice = input("Use this path anyway? (y/n): ").strip().lower()
+            if choice != 'y':
+                continue
+
+        # Save to config
+        config['music_path'] = path
+        save_config(config)
+        print(f"\nSaved! Config stored at: {CONFIG_FILE}")
+        print("-" * 60 + "\n")
+        return path
+
+
+# Get default path (will prompt on first run)
+default_path = get_default_path()
+
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def normalize_quotes(name):
+    """Normalize curly quotes/apostrophes to straight ones"""
+    if not name:
+        return name
+    name = name.replace(''', "'")
+    name = name.replace(''', "'")
+    name = name.replace('"', '"')
+    name = name.replace('"', '"')
+    name = name.replace('…', '...')
+    return name
+
+
+def normalize_case(name):
+    """Normalize artist name to title case"""
+    if not name:
+        return name
+    lowercase_words = {'a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor',
+                       'on', 'at', 'to', 'by', 'of', 'in', 'with'}
+    words = name.split()
+    result = []
+    for i, word in enumerate(words):
+        if i == 0:
+            result.append(word.capitalize())
+        elif word.lower() in lowercase_words:
+            result.append(word.lower())
+        else:
+            result.append(word.capitalize())
+    return ' '.join(result)
+
+
+def normalize_for_compare(name):
+    """Normalize string for comparison"""
+    name = normalize_quotes(name)
+    name = re.sub(r'\.{2,}', '.', name)
+    name = re.sub(r'\s+', ' ', name)
+    return name.lower().strip()
+
+
+def similarity(a, b):
+    """Calculate similarity ratio between two strings (0-1)"""
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
+def format_size(size):
+    """Format file size"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+def get_tags_from_file(filepath):
+    """Get all tags from music file"""
+    ext = filepath.suffix.lower()
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            return {
+                'artist': audio.get('artist', [None])[0],
+                'title': audio.get('title', [None])[0],
+                'album': audio.get('album', [None])[0],
+                'genre': audio.get('genre', [None])[0],
+                'tracknumber': audio.get('tracknumber', [None])[0],
+            }
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            return {
+                'artist': audio.get('artist', [None])[0],
+                'title': audio.get('title', [None])[0],
+                'album': audio.get('album', [None])[0],
+                'genre': audio.get('genre', [None])[0],
+                'tracknumber': audio.get('tracknumber', [None])[0],
+            }
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            return {
+                'artist': audio.get('\xa9ART', [None])[0],
+                'title': audio.get('\xa9nam', [None])[0],
+                'album': audio.get('\xa9alb', [None])[0],
+                'genre': audio.get('\xa9gen', [None])[0],
+                'tracknumber': str(audio.get('trkn', [(None,)])[0][0]) if audio.get('trkn') else None,
+            }
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            return {
+                'artist': audio.get('artist', [None])[0],
+                'title': audio.get('title', [None])[0],
+                'album': audio.get('album', [None])[0],
+                'genre': audio.get('genre', [None])[0],
+                'tracknumber': audio.get('tracknumber', [None])[0],
+            }
+    except Exception:
+        pass
+    return None
+
+
+def get_artist_from_file(filepath):
+    """Get artist tag from music file"""
+    tags = get_tags_from_file(filepath)
+    return tags['artist'] if tags else None
+
+
+def set_artist_in_file(filepath, new_artist):
+    """Set artist tag in music file"""
+    ext = filepath.suffix.lower()
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            audio['\xa9ART'] = [new_artist]
+            audio.save()
+            return True
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+    except Exception as e:
+        print(f"  Error writing {filepath}: {e}")
+    return False
+
+
+def set_album_in_file(filepath, new_album):
+    """Set album tag in music file"""
+    ext = filepath.suffix.lower()
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            audio['album'] = new_album
+            audio.save()
+            return True
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            audio['album'] = new_album
+            audio.save()
+            return True
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            audio['\xa9alb'] = [new_album]
+            audio.save()
+            return True
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            audio['album'] = new_album
+            audio.save()
+            return True
+    except Exception as e:
+        print(f"  Error writing {filepath}: {e}")
+    return False
+
+
+def set_genre_in_file(filepath, new_genre):
+    """Set genre tag in music file"""
+    ext = filepath.suffix.lower()
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            audio['genre'] = new_genre
+            audio.save()
+            return True
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            audio['genre'] = new_genre
+            audio.save()
+            return True
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            audio['\xa9gen'] = [new_genre]
+            audio.save()
+            return True
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            audio['genre'] = new_genre
+            audio.save()
+            return True
+    except Exception as e:
+        print(f"  Error writing {filepath}: {e}")
+    return False
+
+
+def set_tracknumber_in_file(filepath, track_num):
+    """Set track number tag in music file"""
+    ext = filepath.suffix.lower()
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            audio['tracknumber'] = str(track_num)
+            audio.save()
+            return True
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            audio['tracknumber'] = str(track_num)
+            audio.save()
+            return True
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            audio['trkn'] = [(track_num, 0)]
+            audio.save()
+            return True
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            audio['tracknumber'] = str(track_num)
+            audio.save()
+            return True
+    except Exception as e:
+        print(f"  Error writing {filepath}: {e}")
+    return False
+
+
+# ============================================================================
+# Clean Command
+# ============================================================================
+
+def clean_artist(artist):
+    """Remove featuring artists from artist name and normalize"""
+    if not artist:
+        return artist
+    original = artist
+    cleaned = artist
+    for pattern in COMPILED_PATTERNS:
+        cleaned = pattern.sub('', cleaned)
+    cleaned = cleaned.strip()
+    cleaned = normalize_quotes(cleaned)
+    cleaned = normalize_case(cleaned)
+    if not cleaned:
+        return original
+    return cleaned
+
+
+def cmd_clean(args):
+    """Clean artist tags"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    changes = []
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+            artist = get_artist_from_file(filepath)
+            if not artist:
+                continue
+            cleaned = clean_artist(artist)
+            if cleaned != artist:
+                changes.append({
+                    'file': filepath,
+                    'original': artist,
+                    'cleaned': cleaned
+                })
+
+    if not changes:
+        print("No changes needed - all artist tags look clean!")
+        return
+
+    by_artist = {}
+    for change in changes:
+        orig = change['original']
+        if orig not in by_artist:
+            by_artist[orig] = {'cleaned': change['cleaned'], 'files': []}
+        by_artist[orig]['files'].append(change['file'])
+
+    print(f"\nFound {len(changes)} files to update:\n")
+    for original, data in sorted(by_artist.items()):
+        print(f"  \"{original}\"")
+        print(f"    -> \"{data['cleaned']}\"")
+        print(f"    ({len(data['files'])} file(s))")
+        print()
+
+    if args.apply:
+        print("-" * 60)
+        print("Applying changes...")
+        success = 0
+        failed = 0
+        for change in changes:
+            if set_artist_in_file(change['file'], change['cleaned']):
+                success += 1
+            else:
+                failed += 1
+        print(f"\nDone! Updated {success} files, {failed} failed")
+        print("\nRun 'mpc update' to refresh MPD database")
+    else:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --apply to make changes")
+
+
+# ============================================================================
+# Similar Command
+# ============================================================================
+
+def find_similar_artists(artists_dict, threshold=0.85):
+    """Find groups of similar artist names"""
+    artist_names = list(artists_dict.keys())
+    similar_groups = []
+    used = set()
+
+    for i, name1 in enumerate(artist_names):
+        if name1 in used:
+            continue
+        group = [name1]
+        norm1 = normalize_for_compare(name1)
+
+        for j, name2 in enumerate(artist_names[i+1:], i+1):
+            if name2 in used:
+                continue
+            norm2 = normalize_for_compare(name2)
+
+            # Check similarity
+            sim = similarity(norm1, norm2)
+            if sim >= threshold:
+                group.append(name2)
+                used.add(name2)
+                continue
+
+            # Check for "Artist & Collab" patterns
+            if len(norm1) > 3 and len(norm2) > 3:
+                for sep in [' & ', ', ', ' and ', ' with ', ' x ']:
+                    if norm2.startswith(norm1 + sep) or norm1.startswith(norm2 + sep):
+                        group.append(name2)
+                        used.add(name2)
+                        break
+                    if len(norm1) >= 10 and norm2.startswith(norm1) and len(norm2) > len(norm1) + 3:
+                        rest = norm2[len(norm1):]
+                        if rest.startswith((' &', ', ', ' and', ' with', ' feat', ' ft', ' x ')):
+                            group.append(name2)
+                            used.add(name2)
+                            break
+                    if len(norm2) >= 10 and norm1.startswith(norm2) and len(norm1) > len(norm2) + 3:
+                        rest = norm1[len(norm2):]
+                        if rest.startswith((' &', ', ', ' and', ' with', ' feat', ' ft', ' x ')):
+                            group.append(name2)
+                            used.add(name2)
+                            break
+
+        if len(group) > 1:
+            similar_groups.append(group)
+            used.add(name1)
+
+    return similar_groups
+
+
+def cmd_similar(args):
+    """Find and fix similar artist names"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    artists = defaultdict(list)
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+            artist = get_artist_from_file(filepath)
+            if artist:
+                artists[artist].append(filepath)
+
+    print(f"Found {len(artists)} unique artists")
+
+    similar = find_similar_artists(artists, args.threshold)
+
+    if not similar:
+        print("\nNo similar artists found!")
+        return
+
+    print(f"\nFound {len(similar)} groups of similar artists:\n")
+
+    for group in similar:
+        print("=" * 50)
+        for i, name in enumerate(group):
+            file_count = len(artists[name])
+            print(f"  [{i+1}] \"{name}\" ({file_count} files)")
+
+        if args.apply:
+            print()
+            choice = input("  Choose canonical version (number), or 's' to skip: ").strip().lower()
+            if choice == 's' or choice == '':
+                print("  Skipping...")
+                continue
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(group):
+                    canonical = group[idx]
+                    print(f"  Using: \"{canonical}\"")
+                    for variant in group:
+                        if variant == canonical:
+                            continue
+                        for filepath in artists[variant]:
+                            if set_artist_in_file(filepath, canonical):
+                                print(f"    Updated: {filepath.name}")
+                else:
+                    print("  Invalid choice, skipping...")
+            except ValueError:
+                print("  Invalid input, skipping...")
+        print()
+
+    if not args.apply:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --apply to interactively fix artists")
+        print("\nAfter fixing, run 'mpc update' to refresh MPD database")
+
+
+# ============================================================================
+# Albums Command
+# ============================================================================
+
+def find_similar_albums(albums_dict, threshold=0.85):
+    """Find groups of similar album names"""
+    album_keys = list(albums_dict.keys())
+    similar_groups = []
+    used = set()
+
+    for i, key1 in enumerate(album_keys):
+        if key1 in used:
+            continue
+        artist1, album1 = key1
+        group = [key1]
+        norm1 = normalize_for_compare(album1)
+
+        for j, key2 in enumerate(album_keys[i+1:], i+1):
+            if key2 in used:
+                continue
+            artist2, album2 = key2
+
+            # Only compare albums from same artist
+            if normalize_for_compare(artist1) != normalize_for_compare(artist2):
+                continue
+
+            norm2 = normalize_for_compare(album2)
+
+            # Remove year patterns for comparison
+            norm1_no_year = re.sub(r'\s*[\(\[]\d{4}[\)\]]', '', norm1)
+            norm2_no_year = re.sub(r'\s*[\(\[]\d{4}[\)\]]', '', norm2)
+
+            # Remove edition patterns
+            for pattern in [r'\s*[\(\[]deluxe[^\)\]]*[\)\]]', r'\s*[\(\[]remaster[^\)\]]*[\)\]]',
+                          r'\s*[\(\[]expanded[^\)\]]*[\)\]]', r'\s*[\(\[]anniversary[^\)\]]*[\)\]]']:
+                norm1_no_year = re.sub(pattern, '', norm1_no_year, flags=re.IGNORECASE)
+                norm2_no_year = re.sub(pattern, '', norm2_no_year, flags=re.IGNORECASE)
+
+            sim = similarity(norm1_no_year.strip(), norm2_no_year.strip())
+            if sim >= threshold:
+                group.append(key2)
+                used.add(key2)
+
+        if len(group) > 1:
+            similar_groups.append(group)
+            used.add(key1)
+
+    return similar_groups
+
+
+def cmd_albums(args):
+    """Find and fix similar album names"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    albums = defaultdict(list)
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+            tags = get_tags_from_file(filepath)
+            if tags and tags['artist'] and tags['album']:
+                key = (tags['artist'], tags['album'])
+                albums[key].append(filepath)
+
+    print(f"Found {len(albums)} unique albums")
+
+    similar = find_similar_albums(albums, args.threshold)
+
+    if not similar:
+        print("\nNo similar albums found!")
+        return
+
+    print(f"\nFound {len(similar)} groups of similar albums:\n")
+
+    for group in similar:
+        print("=" * 50)
+        for i, (artist, album) in enumerate(group):
+            file_count = len(albums[(artist, album)])
+            print(f"  [{i+1}] \"{artist}\" - \"{album}\" ({file_count} files)")
+
+        if args.apply:
+            print()
+            choice = input("  Choose canonical version (number), or 's' to skip: ").strip().lower()
+            if choice == 's' or choice == '':
+                print("  Skipping...")
+                continue
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(group):
+                    canonical_artist, canonical_album = group[idx]
+                    print(f"  Using: \"{canonical_album}\"")
+                    for variant_artist, variant_album in group:
+                        if (variant_artist, variant_album) == (canonical_artist, canonical_album):
+                            continue
+                        for filepath in albums[(variant_artist, variant_album)]:
+                            if set_album_in_file(filepath, canonical_album):
+                                print(f"    Updated: {filepath.name}")
+                else:
+                    print("  Invalid choice, skipping...")
+            except ValueError:
+                print("  Invalid input, skipping...")
+        print()
+
+    if not args.apply:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --apply to interactively fix albums")
+
+
+# ============================================================================
+# Duplicates Command
+# ============================================================================
+
+def cmd_duplicates(args):
+    """Find duplicate songs"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    by_tags = defaultdict(list)
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    file_count = 0
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+            file_count += 1
+            tags = get_tags_from_file(filepath)
+            if tags and tags['artist'] and tags['title'] and tags['album']:
+                key = (normalize_for_compare(tags['artist']),
+                       normalize_for_compare(tags['album']),
+                       normalize_for_compare(tags['title']))
+                by_tags[key].append({
+                    'path': filepath,
+                    'artist': tags['artist'],
+                    'title': tags['title'],
+                    'album': tags['album'],
+                    'size': filepath.stat().st_size
+                })
+
+    print(f"Scanned {file_count} files")
+
+    duplicates = {k: v for k, v in by_tags.items() if len(v) > 1}
+
+    if not duplicates:
+        print("\nNo duplicates found!")
+        return
+
+    total_dupes = sum(len(v) - 1 for v in duplicates.values())
+    print(f"\nFound {len(duplicates)} songs with duplicates ({total_dupes} extra files):\n")
+
+    for (artist, album, title), files in sorted(duplicates.items()):
+        print(f"  {files[0]['artist']} - {files[0]['title']}")
+        print(f"  Album: {files[0]['album']}")
+        print(f"  ({len(files)} copies)")
+
+        for i, f in enumerate(files):
+            size = format_size(f['size'])
+            print(f"    [{i+1}] {f['path'].name} ({size})")
+
+        if args.delete:
+            print()
+            choice = input("  Delete which? (comma-separated numbers, 's' to skip): ").strip().lower()
+            if choice == 's' or choice == '':
+                print("  Skipping...")
+            else:
+                try:
+                    to_delete = [int(x.strip()) - 1 for x in choice.split(',')]
+                    for idx in to_delete:
+                        if 0 <= idx < len(files):
+                            filepath = files[idx]['path']
+                            filepath.unlink()
+                            print(f"  Deleted: {filepath.name}")
+                except (ValueError, IndexError):
+                    print("  Invalid input, skipping...")
+        print()
+
+    if not args.delete:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --delete to interactively remove duplicates")
+
+
+# ============================================================================
+# Copies Command
+# ============================================================================
+
+def cmd_copies(args):
+    """Find files with (1), (2), etc in filename"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    # Match (1), (2), etc but not years like (2010)
+    copy_pattern = re.compile(r'\s*\(\d{1,2}\)\s*(?=\.[^.]+$)')
+    copies = []
+
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+            if copy_pattern.search(filename):
+                copies.append(filepath)
+
+    if not copies:
+        print("\nNo copy files found!")
+        return
+
+    print(f"\nFound {len(copies)} files with copy markers:\n")
+
+    for filepath in sorted(copies):
+        print(f"  {filepath}")
+
+        if args.delete:
+            choice = input("    Delete? (y/n): ").strip().lower()
+            if choice == 'y':
+                filepath.unlink()
+                print("    Deleted!")
+
+    if not args.delete:
+        print()
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --delete to interactively remove copies")
+
+
+# ============================================================================
+# Missing Command
+# ============================================================================
+
+def cmd_missing(args):
+    """Find files with missing tags"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    missing = []
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+            tags = get_tags_from_file(filepath)
+            missing_tags = []
+            if not tags:
+                missing_tags = ['all tags']
+            else:
+                if not tags.get('artist'):
+                    missing_tags.append('artist')
+                if not tags.get('title'):
+                    missing_tags.append('title')
+                if not tags.get('album'):
+                    missing_tags.append('album')
+
+            if missing_tags:
+                missing.append((filepath, missing_tags))
+
+    if not missing:
+        print("\nAll files have complete tags!")
+        return
+
+    print(f"\nFound {len(missing)} files with missing tags:\n")
+
+    for filepath, tags in missing:
+        print(f"  {filepath.name}")
+        print(f"    Missing: {', '.join(tags)}")
+        print(f"    Path: {filepath.parent}")
+        print()
+
+
+# ============================================================================
+# Genres Command
+# ============================================================================
+
+def cmd_genres(args):
+    """Find artists with inconsistent genres"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    # Group by artist, track genre counts and files
+    artists = defaultdict(lambda: {'genres': defaultdict(list)})
+
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+            tags = get_tags_from_file(filepath)
+            if tags and tags.get('artist'):
+                genre = tags.get('genre') or '(none)'
+                artists[tags['artist']]['genres'][genre].append(filepath)
+
+    # Find artists with multiple genres
+    inconsistent = {}
+    for artist, data in artists.items():
+        if len(data['genres']) > 1:
+            # Sort genres by count (most common first)
+            sorted_genres = sorted(data['genres'].items(), key=lambda x: -len(x[1]))
+            inconsistent[artist] = sorted_genres
+
+    if not inconsistent:
+        print("\nAll artists have consistent genres!")
+        return
+
+    print(f"\nFound {len(inconsistent)} artists with inconsistent genres:\n")
+
+    for artist, genres in sorted(inconsistent.items()):
+        total_files = sum(len(files) for _, files in genres)
+        majority_genre, majority_files = genres[0]
+
+        print("=" * 50)
+        print(f"  {artist} ({total_files} files)")
+        print()
+
+        for i, (genre, files) in enumerate(genres):
+            marker = " [majority]" if i == 0 else ""
+            print(f"    [{i+1}] {genre}: {len(files)} files{marker}")
+
+        # Show outlier files
+        if len(genres) > 1:
+            print()
+            print("    Outlier files:")
+            for genre, files in genres[1:]:  # Skip majority
+                for f in files[:3]:  # Show first 3
+                    print(f"      - {f.name} ({genre})")
+                if len(files) > 3:
+                    print(f"      ... and {len(files) - 3} more")
+
+        if args.apply:
+            print()
+            choice = input("  Fix all to which genre? (number), or 's' to skip: ").strip().lower()
+            if choice == 's' or choice == '':
+                print("  Skipping...")
+            else:
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(genres):
+                        target_genre, _ = genres[idx]
+                        print(f"  Setting all to: \"{target_genre}\"")
+                        for genre, files in genres:
+                            if genre == target_genre:
+                                continue
+                            for filepath in files:
+                                if set_genre_in_file(filepath, target_genre):
+                                    print(f"    Updated: {filepath.name}")
+                    else:
+                        print("  Invalid choice, skipping...")
+                except ValueError:
+                    print("  Invalid input, skipping...")
+        print()
+
+    if not args.apply:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --apply to interactively fix genres")
+
+
+# ============================================================================
+# Stats Command
+# ============================================================================
+
+def cmd_stats(args):
+    """Show library statistics"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    stats = {
+        'total_files': 0,
+        'total_size': 0,
+        'artists': set(),
+        'albums': set(),
+        'genres': set(),
+        'formats': defaultdict(int),
+    }
+
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+
+            stats['total_files'] += 1
+            stats['total_size'] += filepath.stat().st_size
+            stats['formats'][filepath.suffix.lower()] += 1
+
+            tags = get_tags_from_file(filepath)
+            if tags:
+                if tags.get('artist'):
+                    stats['artists'].add(tags['artist'])
+                if tags.get('album'):
+                    stats['albums'].add(tags['album'])
+                if tags.get('genre'):
+                    stats['genres'].add(tags['genre'])
+
+    print(f"\nLibrary Statistics:\n")
+    print(f"  Total files: {stats['total_files']}")
+    print(f"  Total size: {format_size(stats['total_size'])}")
+    print(f"  Unique artists: {len(stats['artists'])}")
+    print(f"  Unique albums: {len(stats['albums'])}")
+    print(f"  Unique genres: {len(stats['genres'])}")
+    print()
+    print("  Formats:")
+    for fmt, count in sorted(stats['formats'].items(), key=lambda x: -x[1]):
+        print(f"    {fmt}: {count} files")
+
+
+# ============================================================================
+# Empty Command
+# ============================================================================
+
+def cmd_empty(args):
+    """Find empty folders"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    empty = []
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path, topdown=False):
+        dirpath = Path(root)
+        if dirpath == path:
+            continue
+        # Check if directory is empty or only contains empty directories
+        contents = list(dirpath.iterdir())
+        if not contents:
+            empty.append(dirpath)
+
+    if not empty:
+        print("\nNo empty folders found!")
+        return
+
+    print(f"\nFound {len(empty)} empty folders:\n")
+
+    for dirpath in sorted(empty):
+        print(f"  {dirpath}")
+
+        if args.delete:
+            choice = input("    Delete? (y/n): ").strip().lower()
+            if choice == 'y':
+                dirpath.rmdir()
+                print("    Deleted!")
+
+    if not args.delete:
+        print()
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --delete to remove empty folders")
+
+
+# ============================================================================
+# Rename Command
+# ============================================================================
+
+def cmd_rename(args):
+    """Rename files to remove track numbers, using title from tags"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    renames = []
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    # Pattern to extract track number at start: "01 ", "01. ", "01 - ", "1 - ", etc.
+    track_pattern = re.compile(r'^(\d{1,2})[\s.\-_]+')
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+            if filepath.suffix.lower() not in EXTENSIONS:
+                continue
+
+            name_without_ext = filepath.stem
+
+            # Check if filename starts with a track number
+            match = track_pattern.match(name_without_ext)
+            if not match:
+                continue
+
+            # Extract the track number
+            track_num = int(match.group(1))
+
+            tags = get_tags_from_file(filepath)
+
+            # Use title from tags if available, otherwise strip number from filename
+            if tags and tags.get('title'):
+                title = tags['title']
+                # Clean title for filename
+                title = re.sub(r'[<>:"/\\|?*]', '', title)
+            else:
+                # Just strip the track number from existing filename
+                title = track_pattern.sub('', name_without_ext)
+
+            new_name = f"{title}{filepath.suffix}"
+
+            if filename != new_name:
+                new_path = filepath.parent / new_name
+                renames.append((filepath, new_path, track_num))
+
+    if not renames:
+        print("\nNo files need renaming!")
+        return
+
+    print(f"\nFound {len(renames)} files to rename:\n")
+
+    for old_path, new_path, track_num in renames:
+        print(f"  {old_path.name}")
+        print(f"    -> {new_path.name} (track {track_num} saved to metadata)")
+
+        if args.apply:
+            if new_path.exists():
+                print("    SKIPPED: Target already exists")
+            else:
+                # First update the track number in metadata
+                set_tracknumber_in_file(old_path, track_num)
+                # Then rename the file
+                old_path.rename(new_path)
+                print("    Renamed + metadata updated!")
+        print()
+
+    if not args.apply:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --apply to rename files and update metadata")
+
+
+# ============================================================================
+# Art Command
+# ============================================================================
+
+def has_album_art(dirpath):
+    """Check if directory has album art"""
+    art_names = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png',
+                 'album.jpg', 'album.png', 'front.jpg', 'front.png']
+    for name in art_names:
+        if (dirpath / name).exists():
+            return True
+    return False
+
+
+def search_album_art(artist, album):
+    """Search Deezer for album art"""
+    # Clean up album name for better search results
+    clean_album = re.sub(r'\s*[\(\[].*?[\)\]]', '', album)  # Remove (Deluxe), [2008], etc.
+    query = f"{artist} {clean_album}"
+    url = f"https://api.deezer.com/search/album?q={urllib.parse.quote(query)}&limit=5"
+
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+            if data.get('data'):
+                # Try to find best match - prefer exact artist match
+                for result in data['data']:
+                    result_artist = result.get('artist', {}).get('name', '').lower()
+                    if result_artist == artist.lower():
+                        return result.get('cover_xl') or result.get('cover_big')
+                # Fall back to first result
+                return data['data'][0].get('cover_xl') or data['data'][0].get('cover_big')
+    except Exception as e:
+        pass
+    return None
+
+
+def download_art(url, filepath):
+    """Download album art to file"""
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            with open(filepath, 'wb') as f:
+                f.write(response.read())
+        return True
+    except Exception:
+        pass
+    return False
+
+
+def cmd_art(args):
+    """Download missing album art"""
+    path = Path(args.path).expanduser()
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return
+
+    # Find albums without art
+    albums_without_art = {}
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        dirpath = Path(root)
+
+        # Check if this directory has music files
+        music_files = [f for f in files if Path(f).suffix.lower() in EXTENSIONS]
+        if not music_files:
+            continue
+
+        if has_album_art(dirpath):
+            continue
+
+        # Get album info from first music file
+        filepath = dirpath / music_files[0]
+        tags = get_tags_from_file(filepath)
+        if tags and tags.get('artist') and tags.get('album'):
+            key = (tags['artist'], tags['album'])
+            if key not in albums_without_art:
+                albums_without_art[key] = dirpath
+
+    if not albums_without_art:
+        print("\nAll albums have cover art!")
+        return
+
+    print(f"\nFound {len(albums_without_art)} albums without art:\n")
+
+    for (artist, album), dirpath in sorted(albums_without_art.items()):
+        print(f"  {artist} - {album}")
+        print(f"    {dirpath}")
+
+        if args.apply:
+            print("    Searching Deezer...")
+            art_url = search_album_art(artist, album)
+            if art_url:
+                cover_path = dirpath / 'cover.jpg'
+                if download_art(art_url, cover_path):
+                    print(f"    Downloaded: {cover_path.name}")
+                else:
+                    print("    Failed to download")
+            else:
+                print("    No art found")
+        print()
+
+    if not args.apply:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --apply to download missing album art")
+
+
+# ============================================================================
+# Main
+# ============================================================================
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Music library metadata management tool',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Commands:
+  clean       Remove "feat." and normalize artist names
+  similar     Find and fix similar artist names
+  albums      Find similar album names (different years/editions)
+  duplicates  Find duplicate songs (same artist+album+title)
+  copies      Find files with (1), (2) in filename
+  missing     Find files with missing tags
+  genres      Find artists with inconsistent genres
+  stats       Show library statistics
+  empty       Find empty folders
+  rename      Remove track numbers from filenames
+  art         Download missing album art
+
+Examples:
+  music-tagger clean --apply
+  music-tagger similar --threshold 0.9
+  music-tagger duplicates --delete
+  music-tagger stats --path ~/Music
+"""
+    )
+
+    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+
+    # Clean command
+    clean_parser = subparsers.add_parser('clean', help='Clean artist tags')
+    clean_parser.add_argument('--apply', '-a', action='store_true',
+                              help='Actually apply changes (default is dry run)')
+    clean_parser.add_argument('--path', '-p', default=default_path,
+                              help=f'Music directory (default: {default_path})')
+
+    # Similar command
+    similar_parser = subparsers.add_parser('similar', help='Find similar artists')
+    similar_parser.add_argument('--apply', '-a', action='store_true',
+                                help='Interactively fix similar artists')
+    similar_parser.add_argument('--path', '-p', default=default_path,
+                                help=f'Music directory (default: {default_path})')
+    similar_parser.add_argument('--threshold', '-t', type=float, default=0.85,
+                                help='Similarity threshold 0-1 (default: 0.85)')
+
+    # Albums command
+    albums_parser = subparsers.add_parser('albums', help='Find similar albums')
+    albums_parser.add_argument('--apply', '-a', action='store_true',
+                               help='Interactively fix similar albums')
+    albums_parser.add_argument('--path', '-p', default=default_path,
+                               help=f'Music directory (default: {default_path})')
+    albums_parser.add_argument('--threshold', '-t', type=float, default=0.85,
+                               help='Similarity threshold 0-1 (default: 0.85)')
+
+    # Duplicates command
+    dupes_parser = subparsers.add_parser('duplicates', help='Find duplicate songs')
+    dupes_parser.add_argument('--delete', '-d', action='store_true',
+                              help='Interactively delete duplicates')
+    dupes_parser.add_argument('--path', '-p', default=default_path,
+                              help=f'Music directory (default: {default_path})')
+
+    # Copies command
+    copies_parser = subparsers.add_parser('copies', help='Find files with (1), (2) etc')
+    copies_parser.add_argument('--delete', '-d', action='store_true',
+                               help='Interactively delete copies')
+    copies_parser.add_argument('--path', '-p', default=default_path,
+                               help=f'Music directory (default: {default_path})')
+
+    # Missing command
+    missing_parser = subparsers.add_parser('missing', help='Find files with missing tags')
+    missing_parser.add_argument('--path', '-p', default=default_path,
+                                help=f'Music directory (default: {default_path})')
+
+    # Genres command
+    genres_parser = subparsers.add_parser('genres', help='Find inconsistent genres per artist')
+    genres_parser.add_argument('--apply', '-a', action='store_true',
+                               help='Interactively fix inconsistent genres')
+    genres_parser.add_argument('--path', '-p', default=default_path,
+                               help=f'Music directory (default: {default_path})')
+
+    # Stats command
+    stats_parser = subparsers.add_parser('stats', help='Show library statistics')
+    stats_parser.add_argument('--path', '-p', default=default_path,
+                              help=f'Music directory (default: {default_path})')
+
+    # Empty command
+    empty_parser = subparsers.add_parser('empty', help='Find empty folders')
+    empty_parser.add_argument('--delete', '-d', action='store_true',
+                              help='Delete empty folders')
+    empty_parser.add_argument('--path', '-p', default=default_path,
+                              help=f'Music directory (default: {default_path})')
+
+    # Rename command
+    rename_parser = subparsers.add_parser('rename', help='Remove track numbers from filenames')
+    rename_parser.add_argument('--apply', '-a', action='store_true',
+                               help='Actually rename files (default is dry run)')
+    rename_parser.add_argument('--path', '-p', default=default_path,
+                               help=f'Music directory (default: {default_path})')
+
+    # Art command
+    art_parser = subparsers.add_parser('art', help='Download missing album art')
+    art_parser.add_argument('--apply', '-a', action='store_true',
+                            help='Actually download art (default is dry run)')
+    art_parser.add_argument('--path', '-p', default=default_path,
+                            help=f'Music directory (default: {default_path})')
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return
+
+    commands = {
+        'clean': cmd_clean,
+        'similar': cmd_similar,
+        'albums': cmd_albums,
+        'duplicates': cmd_duplicates,
+        'copies': cmd_copies,
+        'missing': cmd_missing,
+        'genres': cmd_genres,
+        'stats': cmd_stats,
+        'empty': cmd_empty,
+        'rename': cmd_rename,
+        'art': cmd_art,
+    }
+
+    commands[args.command](args)
+
+
+if __name__ == '__main__':
+    main()
