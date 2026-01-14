@@ -35,7 +35,20 @@ const MAUVE: Color = Color::Rgb(198, 160, 246);
 struct StreamInfo {
     title: String,
     id: String,
+    #[serde(skip)]
+    channel: String,
 }
+
+#[derive(Clone)]
+struct Channel {
+    name: &'static str,
+    url: &'static str,
+}
+
+const CHANNELS: &[Channel] = &[
+    Channel { name: "Lofi Girl", url: "https://www.youtube.com/@LofiGirl/streams" },
+    Channel { name: "Tokyo Dreams", url: "https://www.youtube.com/channel/UCfj4xwi09E5lWnBay8KYkAA/streams" },
+];
 
 struct App {
     streams: Vec<StreamInfo>,
@@ -313,8 +326,8 @@ fn ui(f: &mut Frame, app: &mut App) {
 
     // Header
     let header = Paragraph::new(Line::from(vec![
-        Span::styled(" lofi girl", Style::default().fg(FLAMINGO).add_modifier(Modifier::BOLD)),
-        Span::styled(" stream picker", Style::default().fg(SUBTEXT0)),
+        Span::styled(" Lofi", Style::default().fg(FLAMINGO).add_modifier(Modifier::BOLD)),
+        Span::styled(" Stream Picker", Style::default().fg(SUBTEXT0)),
     ]))
     .style(Style::default().bg(MANTLE));
     f.render_widget(header, outer[0]);
@@ -345,30 +358,49 @@ fn render_stream_list(f: &mut Frame, app: &mut App, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let items: Vec<ListItem> = app
-        .filtered_indices
-        .iter()
-        .enumerate()
-        .map(|(list_idx, &stream_idx)| {
-            let stream = &app.streams[stream_idx];
-            let (name, _) = parse_title(&stream.title);
-            let is_selected = app.list_state.selected() == Some(list_idx);
+    let mut items: Vec<ListItem> = Vec::new();
+    let mut current_channel = String::new();
+    let mut item_to_stream: Vec<Option<usize>> = Vec::new(); // Maps item index to list_idx
 
-            let name_style = if is_selected {
-                Style::default().fg(FLAMINGO).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(TEXT)
-            };
+    for (list_idx, &stream_idx) in app.filtered_indices.iter().enumerate() {
+        let stream = &app.streams[stream_idx];
 
-            ListItem::new(Line::from(Span::styled(name, name_style)))
-        })
-        .collect();
+        // Add section header when channel changes
+        if stream.channel != current_channel {
+            if !current_channel.is_empty() {
+                items.push(ListItem::new(Line::from(""))); // spacing
+                item_to_stream.push(None);
+            }
+            items.push(ListItem::new(Line::from(Span::styled(
+                format!("── {} ──", stream.channel),
+                Style::default().fg(LAVENDER).add_modifier(Modifier::BOLD),
+            ))));
+            item_to_stream.push(None);
+            current_channel = stream.channel.clone();
+        }
 
-    let list = List::new(items)
-        .highlight_style(Style::default().bg(SURFACE0))
-        .highlight_symbol("  ");
+        let (name, _) = parse_title(&stream.title);
+        let is_selected = app.list_state.selected() == Some(list_idx);
 
-    f.render_stateful_widget(list, inner, &mut app.list_state);
+        let bg_style = if is_selected {
+            Style::default().bg(SURFACE0)
+        } else {
+            Style::default()
+        };
+
+        let name_style = if is_selected {
+            Style::default().fg(FLAMINGO).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(TEXT)
+        };
+
+        items.push(ListItem::new(Line::from(Span::styled(format!("  {}", name), name_style))).style(bg_style));
+        item_to_stream.push(Some(list_idx));
+    }
+
+    let list = List::new(items);
+
+    f.render_stateful_widget(list, inner, &mut ListState::default());
 
     if !app.filter_query.is_empty() {
         let filter_text = format!(" /{} ", app.filter_query);
@@ -438,7 +470,7 @@ fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {
         if !desc.is_empty() {
             lines.push(Line::from(Span::styled(desc, Style::default().fg(SUBTEXT0))));
         } else {
-            lines.push(Line::from(Span::styled("lofi girl", Style::default().fg(OVERLAY0))));
+            lines.push(Line::from(Span::styled(&stream.channel, Style::default().fg(OVERLAY0))));
         }
 
         let info = Paragraph::new(lines)
@@ -502,25 +534,36 @@ fn render_filter_popup(f: &mut Frame, app: &App, area: Rect) {
 }
 
 async fn fetch_streams() -> Result<Vec<StreamInfo>> {
-    let output = Command::new("yt-dlp")
-        .args([
-            "--flat-playlist",
-            "-I", "1:20",
-            "https://www.youtube.com/@LofiGirl/streams",
-            "-j",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .await?;
+    let mut all_streams = Vec::new();
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let streams: Vec<StreamInfo> = stdout
-        .lines()
-        .filter_map(|line| serde_json::from_str(line).ok())
-        .collect();
+    for channel in CHANNELS {
+        let output = Command::new("yt-dlp")
+            .args([
+                "--flat-playlist",
+                "-I", "1:15",
+                channel.url,
+                "-j",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .await?;
 
-    Ok(streams)
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut streams: Vec<StreamInfo> = stdout
+            .lines()
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .collect();
+
+        // Mark each stream with its channel
+        for stream in &mut streams {
+            stream.channel = channel.name.to_string();
+        }
+
+        all_streams.extend(streams);
+    }
+
+    Ok(all_streams)
 }
 
 async fn load_thumbnail(video_id: &str, picker: &mut Picker) -> Result<StatefulProtocol> {

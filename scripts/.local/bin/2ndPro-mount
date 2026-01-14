@@ -1,15 +1,18 @@
 #!/bin/bash
 # Mount 2ndPro NTFS drive
 
-MOUNT_POINT="/run/media/taubut/2ndPro"
+UUID="840048A400489F54"
+MOUNT_POINT="/mnt/2ndPro"
 
-if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
-    echo "2ndPro is already mounted at $MOUNT_POINT"
+# Check if already mounted anywhere
+CURRENT_MOUNT=$(lsblk -o MOUNTPOINT -n /dev/disk/by-uuid/$UUID 2>/dev/null | grep -v '^$')
+if [[ -n "$CURRENT_MOUNT" ]]; then
+    echo "2ndPro is already mounted at $CURRENT_MOUNT"
     exit 0
 fi
 
 sudo mkdir -p "$MOUNT_POINT"
-sudo mount -t ntfs-3g /dev/nvme1n1p2 "$MOUNT_POINT"
+sudo mount -t ntfs-3g -o uid=1000,gid=1000,dmask=022,fmask=133 UUID=$UUID "$MOUNT_POINT"
 
 if mountpoint -q "$MOUNT_POINT"; then
     echo "2ndPro mounted successfully at $MOUNT_POINT"
