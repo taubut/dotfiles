@@ -47,8 +47,8 @@ wmclass=zen
 wmclassmatch=2
 
 [General]
-count=9
-rules=08bf8455-8ed9-4c6c-8429-1f99b6c2fd20,1f2a8d2f-01f6-48bc-b314-f5b8cf76a6ba,1278d37d-5531-4763-9b63-5820f34ce856,0f029b11-9f94-4692-99ee-0e15fcbcf4d3,ca55a419-d431-43e0-a3d3-83367789c56c,fe7c0f77-24c4-41f5-898d-169a129a277a,70929a01-aca4-4c19-a422-29c295cd59e2,cava-widget-rule,b75d73f0-0799-47ee-825b-b4052e2cff2f
+count=10
+rules=e88c864f-7df2-4711-8efe-6b80b6da9422,08bf8455-8ed9-4c6c-8429-1f99b6c2fd20,1f2a8d2f-01f6-48bc-b314-f5b8cf76a6ba,1278d37d-5531-4763-9b63-5820f34ce856,0f029b11-9f94-4692-99ee-0e15fcbcf4d3,ca55a419-d431-43e0-a3d3-83367789c56c,fe7c0f77-24c4-41f5-898d-169a129a277a,70929a01-aca4-4c19-a422-29c295cd59e2,cava-widget-rule,b75d73f0-0799-47ee-825b-b4052e2cff2f
 
 [YouTube Music Desktop]
 Description=YouTube Music Desktop Opacity
@@ -105,6 +105,13 @@ title=cava
 titlematch=1
 wmclass=cava
 wmclasscomplete=false
+
+[e88c864f-7df2-4711-8efe-6b80b6da9422]
+Description=Application settings for com.edde746.plezy
+opacityinactiverule=2
+wmclass=plezy com.edde746.plezy
+wmclasscomplete=true
+wmclassmatch=1
 
 [fe7c0f77-24c4-41f5-898d-169a129a277a]
 Description=Window settings for YouTube Music Desktop App
