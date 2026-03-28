@@ -20,3 +20,21 @@ else
     echo "Failed to mount 2ndPro"
     exit 1
 fi
+
+# Mount Steam library image
+STEAM_IMG="$MOUNT_POINT/steamlibrary.img"
+STEAM_MOUNT="/mnt/steamlib"
+
+if mountpoint -q "$STEAM_MOUNT"; then
+    echo "Steam library already mounted at $STEAM_MOUNT"
+else
+    sudo mkdir -p "$STEAM_MOUNT"
+    sudo mount -o loop "$STEAM_IMG" "$STEAM_MOUNT"
+    sudo chown 1000:1000 "$STEAM_MOUNT"
+    if mountpoint -q "$STEAM_MOUNT"; then
+        echo "Steam library mounted at $STEAM_MOUNT"
+    else
+        echo "Failed to mount Steam library image"
+        exit 1
+    fi
+fi
