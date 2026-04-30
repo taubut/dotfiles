@@ -22,6 +22,7 @@ gaps outer -5
 font pango:Fira Sans 11
 focus_follows_mouse yes
 xwayland enable
+default_orientation auto
 
 ### Mouse modifier — drag windows with $mod+LMB, resize with $mod+RMB
 floating_modifier $mod normal
