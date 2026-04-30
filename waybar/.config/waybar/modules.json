@@ -7,7 +7,7 @@
   // Workspaces (sway)
   "sway/workspaces": {
     "disable-scroll": false,
-    "all-outputs": false,
+    "all-outputs": true,
     "format": "{name}: {windows}",
     "format-window-separator": " ",
     "window-rewrite-default": "",
