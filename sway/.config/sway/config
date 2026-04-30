@@ -158,7 +158,6 @@ bar {
 exec swaybg -o '*' -i "$(cat ~/.cache/hypr-wallpaper 2>/dev/null || echo /usr/share/wallpapers/cachyos-wallpapers/Skyscraper.png)" -m fill
 exec mako
 exec fcitx5 -d
-exec mpd-mpris
 exec /usr/lib/polkit-kde-authentication-agent-1
 exec systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
