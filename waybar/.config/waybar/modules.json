@@ -224,7 +224,7 @@
     "exec": "~/.config/waybar/scripts/check-updates.sh",
     "interval": 600,
     "return-type": "json",
-    "on-click": "cachy-update",
+    "on-click": "ghostty -e cachy-update",
     "tooltip": true
   },
 

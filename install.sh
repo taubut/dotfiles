@@ -20,6 +20,7 @@ cd "$DOTFILES"
 
 # Stow all packages
 STOW_PACKAGES=(
+    mako
     sway
     waybar
     wlogout
