@@ -1,0 +1,9 @@
+#!/bin/bash
+# Clean compositor-aware logout
+if [ -n "$SWAYSOCK" ] && command -v swaymsg >/dev/null; then
+    swaymsg exit
+elif [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && command -v hyprctl >/dev/null; then
+    hyprctl dispatch exit
+else
+    loginctl terminate-user "$USER"
+fi

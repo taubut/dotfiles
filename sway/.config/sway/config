@@ -1,0 +1,183 @@
+# Sway config — translated from Hyprland keybinds for taubut
+# Reference: man 5 sway
+
+### Variables
+set $mod Mod4
+set $term ghostty
+set $filemanager nautilus
+set $browser zen-browser
+set $menu ~/.local/bin/anchovy
+set $lock swaylock-effects -e -K -p 10 -f --font Hack-Regular
+
+### Outputs (monitors)
+output DP-3 mode 2560x1440@164.957Hz pos 0 854 scale 1
+output DP-2 mode 2560x1440@164.957Hz pos 2560 0 scale 1 transform 270
+workspace 1 output DP-3
+
+### Look
+default_border pixel 3
+default_floating_border pixel 3
+gaps inner 15
+gaps outer -5
+font pango:Fira Sans 11
+focus_follows_mouse yes
+xwayland enable
+
+### Mouse modifier — drag windows with $mod+LMB, resize with $mod+RMB
+floating_modifier $mod normal
+
+### Core bindings
+bindsym $mod+Return       exec $term
+bindsym $mod+e            exec $filemanager
+bindsym $mod+b            exec $browser
+bindsym $mod+space        exec $menu
+bindsym $mod+q            kill
+bindsym $mod+Shift+m      exec swaymsg exit
+bindsym $mod+v            floating toggle
+bindsym $mod+f            fullscreen
+bindsym $mod+l            exec $lock
+bindsym $mod+o            exec killall -SIGUSR2 waybar
+bindsym $mod+j            split toggle
+bindsym $mod+y            sticky toggle
+bindsym $mod+r            mode "resize"
+
+### Reload config
+bindsym $mod+Shift+c      reload
+
+### Gap adjust (Mod+Ctrl+Plus/Minus for inner, +Shift for outer)
+bindsym $mod+Ctrl+equal       gaps inner all plus 2
+bindsym $mod+Ctrl+minus       gaps inner all minus 2
+bindsym $mod+Ctrl+Shift+equal gaps outer all plus 2
+bindsym $mod+Ctrl+Shift+minus gaps outer all minus 2
+
+### Screenshots — Print key variants (matches your Hyprland setup)
+bindsym Print             exec grimshot --notify savecopy area   ~/Pictures/Screenshots/$(date +%Y%m%d_%H%M%S).png
+bindsym Ctrl+Print        exec grimshot --notify savecopy active ~/Pictures/Screenshots/$(date +%Y%m%d_%H%M%S).png
+bindsym Alt+Print         exec grimshot --notify savecopy output ~/Pictures/Screenshots/$(date +%Y%m%d_%H%M%S).png
+bindsym $mod+Shift+s      exec grimshot --notify savecopy area   ~/Pictures/Screenshots/$(date +%Y%m%d_%H%M%S).png
+
+### Focus (arrow keys)
+bindsym $mod+Left         focus left
+bindsym $mod+Right        focus right
+bindsym $mod+Up           focus up
+bindsym $mod+Down         focus down
+
+### Move active window (Shift + arrows)
+bindsym $mod+Shift+Left   move left
+bindsym $mod+Shift+Right  move right
+bindsym $mod+Shift+Up     move up
+bindsym $mod+Shift+Down   move down
+
+### Resize (Mod+Ctrl+Shift+arrows — same as your Hyprland quick resize)
+bindsym $mod+Ctrl+Shift+Right  resize grow   width  15px
+bindsym $mod+Ctrl+Shift+Left   resize shrink width  15px
+bindsym $mod+Ctrl+Shift+Up     resize shrink height 15px
+bindsym $mod+Ctrl+Shift+Down   resize grow   height 15px
+
+### Resize submap (Mod+R then arrows/hjkl, Esc to exit)
+mode "resize" {
+    bindsym Right        resize grow   width  15px
+    bindsym Left         resize shrink width  15px
+    bindsym Up           resize shrink height 15px
+    bindsym Down         resize grow   height 15px
+    bindsym l            resize grow   width  15px
+    bindsym h            resize shrink width  15px
+    bindsym k            resize shrink height 15px
+    bindsym j            resize grow   height 15px
+    bindsym Escape       mode "default"
+    bindsym Return       mode "default"
+}
+
+### Workspaces — switch
+bindsym $mod+1            workspace number 1
+bindsym $mod+2            workspace number 2
+bindsym $mod+3            workspace number 3
+bindsym $mod+4            workspace number 4
+bindsym $mod+5            workspace number 5
+bindsym $mod+6            workspace number 6
+bindsym $mod+7            workspace number 7
+bindsym $mod+8            workspace number 8
+bindsym $mod+9            workspace number 9
+bindsym $mod+0            workspace number 10
+
+### Workspaces — move active window AND switch (Mod+Ctrl+digit)
+bindsym $mod+Ctrl+1       move container to workspace number 1; workspace number 1
+bindsym $mod+Ctrl+2       move container to workspace number 2; workspace number 2
+bindsym $mod+Ctrl+3       move container to workspace number 3; workspace number 3
+bindsym $mod+Ctrl+4       move container to workspace number 4; workspace number 4
+bindsym $mod+Ctrl+5       move container to workspace number 5; workspace number 5
+bindsym $mod+Ctrl+6       move container to workspace number 6; workspace number 6
+bindsym $mod+Ctrl+7       move container to workspace number 7; workspace number 7
+bindsym $mod+Ctrl+8       move container to workspace number 8; workspace number 8
+bindsym $mod+Ctrl+9       move container to workspace number 9; workspace number 9
+bindsym $mod+Ctrl+0       move container to workspace number 10; workspace number 10
+
+### Workspaces — move active window without switching (Mod+Shift+digit)
+bindsym $mod+Shift+1      move container to workspace number 1
+bindsym $mod+Shift+2      move container to workspace number 2
+bindsym $mod+Shift+3      move container to workspace number 3
+bindsym $mod+Shift+4      move container to workspace number 4
+bindsym $mod+Shift+5      move container to workspace number 5
+bindsym $mod+Shift+6      move container to workspace number 6
+bindsym $mod+Shift+7      move container to workspace number 7
+bindsym $mod+Shift+8      move container to workspace number 8
+bindsym $mod+Shift+9      move container to workspace number 9
+bindsym $mod+Shift+0      move container to workspace number 10
+
+### Workspace cycle / previous
+bindsym $mod+period       workspace next
+bindsym $mod+comma        workspace prev
+bindsym $mod+slash        workspace back_and_forth
+bindsym $mod+Ctrl+Right   workspace next
+bindsym $mod+Ctrl+Left    workspace prev
+
+### Scratchpad (Mod+- to send, Mod+= to toggle)
+bindsym $mod+minus        move scratchpad
+bindsym $mod+equal        scratchpad show
+
+### Scroll wheel cycles workspaces (Mod + scroll)
+bindsym $mod+Button4      workspace prev
+bindsym $mod+Button5      workspace next
+
+### Volume / media / brightness
+bindsym --locked XF86AudioRaiseVolume  exec pactl set-sink-volume @DEFAULT_SINK@ +5%
+bindsym --locked XF86AudioLowerVolume  exec pactl set-sink-volume @DEFAULT_SINK@ -5%
+bindsym --locked XF86AudioMute         exec pactl set-sink-mute @DEFAULT_SINK@ toggle
+bindsym --locked XF86AudioPlay         exec playerctl play-pause
+bindsym --locked XF86AudioNext         exec playerctl next
+bindsym --locked XF86AudioPrev         exec playerctl previous
+bindsym --locked XF86MonBrightnessUp   exec brightnessctl s +5%
+bindsym --locked XF86MonBrightnessDown exec brightnessctl s 5%-
+
+### Status bar — uses your existing waybar config
+bar {
+    swaybar_command waybar
+}
+
+### Autostart — same daemons your Hyprland uses
+exec swaybg -o '*' -i "$(cat ~/.cache/hypr-wallpaper 2>/dev/null || echo /usr/share/wallpapers/cachyos-wallpapers/Skyscraper.png)" -m fill
+exec mako
+exec fcitx5 -d
+exec mpd-mpris
+exec /usr/lib/polkit-kde-authentication-agent-1
+exec systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+
+### Idle handler (auto-lock after 5min, lock on suspend)
+exec swayidle -w \
+    timeout 300 '$lock' \
+    before-sleep '$lock'
+
+### Window rules
+# WoW Classic — float + sticky so workspace switches don't freeze its render
+# In-game: set Display Mode to "Windowed" (not "Windowed Fullscreen")
+for_window [class="^WoWClassic\.exe$"] floating enable, sticky enable, resize set 100 ppt 100 ppt, move position center
+for_window [class="^Wow\.exe$"]        floating enable, sticky enable, resize set 100 ppt 100 ppt, move position center
+for_window [title="^World of Warcraft$"] floating enable, sticky enable, resize set 100 ppt 100 ppt, move position center
+
+### Wallpaper picker (matches your Hyprland Ctrl+Mod+Alt+W binding)
+bindsym Ctrl+$mod+Alt+w   exec ~/.local/bin/wallpaper-picker-sway
+
+### Drop-in for distro / personal overrides + wallust-generated colors
+include /etc/sway/config.d/*
+include ~/.config/sway/conf.d/*

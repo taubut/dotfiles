@@ -1,0 +1,30 @@
+{
+    "reload_style_on_change": true,
+    "layer": "top",
+    "position": "top",
+    "spacing": 0,
+    "height": 32,
+
+    "include": [
+        "~/.config/waybar/modules.json"
+    ],
+
+    "modules-left": [
+        "custom/appmenu",
+        "sway/workspaces",
+        "hyprland/workspaces",
+        "memory"
+    ],
+
+    "modules-center": [
+        "clock"
+    ],
+
+    "modules-right": [
+        "custom/media",
+        "custom/weather",
+        "pulseaudio",
+        "custom/updates",
+        "custom/exit"
+    ]
+}

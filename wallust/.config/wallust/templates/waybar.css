@@ -1,0 +1,118 @@
+* {
+    background-color: transparent;
+    color: {{color7}};
+    border: none;
+    border-radius: 0;
+    min-height: 0;
+    font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free", FontAwesome;
+    font-size: 12px;
+}
+
+window#waybar {
+    background-color: alpha({{color0}}, 0.6);
+}
+
+#custom-appmenu {
+    min-width: 20px;
+    margin: 0px 10px 0px 6px;
+    font-size: 18px;
+    color: {{color4}};
+}
+
+#workspaces {
+    background: transparent;
+    margin-right: 4px;
+}
+
+#workspaces button {
+    all: initial;
+    padding: 2px 8px;
+    margin: 4px 2px;
+    background: alpha({{color8}}, 0.3);
+    border-radius: 0px;
+}
+
+#workspaces button label {
+    color: {{color8}};
+}
+
+/* has windows but not the active one */
+#workspaces button:not(.empty):not(.focused):not(.active) {
+    background: alpha({{color5}}, 0.9);
+}
+
+#workspaces button:not(.empty):not(.focused):not(.active) label {
+    color: {{background}};
+    font-weight: 700;
+}
+
+#workspaces button.active,
+#workspaces button.focused {
+    background: alpha({{color2}}, 0.85);
+}
+
+#workspaces button.active label,
+#workspaces button.focused label {
+    color: {{background}};
+    font-size: 13px;
+    font-weight: 900;
+}
+
+#cpu,
+#memory {
+    color: {{color7}};
+    margin: 0 7.5px;
+}
+
+#network.speed {
+    color: {{color7}};
+    margin: 0 7.5px;
+}
+
+#clock {
+    color: {{foreground}};
+    padding: 0 10px;
+}
+
+#custom-separator {
+    color: {{color8}};
+}
+
+#custom-media {
+    margin: 0 12px;
+}
+
+#custom-weather {
+    margin: 0 12px;
+}
+
+#tray {
+    margin: 0 7.5px;
+}
+
+#temperature {
+    color: {{color7}};
+    margin: 0 6px;
+}
+
+#pulseaudio {
+    color: {{color8}};
+    margin: 0 7.5px;
+}
+
+#network {
+    color: {{color8}};
+    margin: 0 7.5px;
+}
+
+#custom-exit {
+    color: {{color7}};
+    margin: 0 6px;
+}
+
+tooltip {
+    background-color: alpha({{color0}}, 0.85);
+    color: {{color7}};
+    border-radius: 4px;
+    padding: 4px 8px;
+}

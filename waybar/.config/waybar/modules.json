@@ -1,0 +1,237 @@
+{
+  // Separator
+  "custom/separator": {
+    "format": "<span>|</span>"
+  },
+
+  // Workspaces (sway)
+  "sway/workspaces": {
+    "disable-scroll": false,
+    "all-outputs": false,
+    "format": "{name}: {windows}",
+    "format-window-separator": " ",
+    "window-rewrite-default": "",
+    "window-rewrite": {
+      "title<.*rmpc.*>": "[Music]",
+      "title<.*Claude Code.*>": "[Claude]",
+      "title<.*btop.*>": "[Monitor]",
+      "title<.*htop.*>": "[Monitor]",
+      "title<.*nvim.*>": "[Vim]",
+      "title<.* vim .*>": "[Vim]",
+      "title<.*yazi.*>": "[Files]",
+      "title<.*lazygit.*>": "[Git]",
+      "title<.*ssh .*>": "[SSH]",
+      "class<zen>": "[Zen]",
+      "class<discord>": "[Discord]",
+      "class<ghostty>": "[Term]",
+      "class<com.mitchellh.ghostty>": "[Term]",
+      "class<Alacritty>": "[Term]",
+      "class<kitty>": "[Term]",
+      "class<foot>": "[Term]",
+      "class<org.kde.dolphin>": "[Files]",
+      "class<nautilus>": "[Files]",
+      "class<thunar>": "[Files]",
+      "class<nemo>": "[Files]",
+      "class<rmpc>": "[Music]",
+      "class<spotify>": "[Spotify]",
+      "class<steam>": "[Steam]",
+      "class<firefox>": "[Firefox]",
+      "class<org.mozilla.firefox>": "[Firefox]",
+      "class<chromium>": "[Chrome]",
+      "class<google-chrome>": "[Chrome]",
+      "class<brave-browser>": "[Brave]",
+      "class<qutebrowser>": "[Qute]",
+      "class<org.qutebrowser.qutebrowser>": "[Qute]",
+      "class<code>": "[Code]",
+      "class<Code>": "[Code]",
+      "class<obsidian>": "[Obsidian]",
+      "class<slack>": "[Slack]",
+      "class<telegram>": "[Telegram]",
+      "class<vlc>": "[VLC]",
+      "class<mpv>": "[MPV]",
+      "class<obs>": "[OBS]",
+      "class<gimp>": "[GIMP]",
+      "class<pavucontrol>": "[Audio]",
+      "class<org.pulseaudio.pavucontrol>": "[Audio]",
+      "class<blueman-manager>": "[Bluetooth]",
+      "class<org.kde.kate>": "[Kate]",
+      "class<org.kde.konsole>": "[Term]",
+      "class<libreoffice>": "[Office]",
+      "class<eog>": "[Images]",
+      "class<org.gnome.Nautilus>": "[Files]"
+    },
+    "persistent-workspaces": {
+      "1": [], "2": [], "3": [], "4": [], "5": [],
+      "6": [], "7": [], "8": [], "9": [], "10": []
+    }
+  },
+
+  // Workspaces (hyprland)
+  "hyprland/workspaces": {
+    "on-click": "activate",
+    "format": "{id}: {windows}",
+    "format-window-separator": " ",
+    "window-rewrite-default": "",
+    "window-rewrite": {
+      "title<.*rmpc.*>": "[Music]",
+      "title<.*Claude Code.*>": "[Claude]",
+      "title<.*btop.*>": "[Monitor]",
+      "title<.*htop.*>": "[Monitor]",
+      "title<.*nvim.*>": "[Vim]",
+      "title<.* vim .*>": "[Vim]",
+      "title<.*yazi.*>": "[Files]",
+      "title<.*lazygit.*>": "[Git]",
+      "title<.*ssh .*>": "[SSH]",
+      "class<zen>": "[Zen]",
+      "class<discord>": "[Discord]",
+      "class<ghostty>": "[Term]",
+      "class<com.mitchellh.ghostty>": "[Term]",
+      "class<Alacritty>": "[Term]",
+      "class<kitty>": "[Term]",
+      "class<foot>": "[Term]",
+      "class<org.kde.dolphin>": "[Files]",
+      "class<nautilus>": "[Files]",
+      "class<thunar>": "[Files]",
+      "class<nemo>": "[Files]",
+      "class<rmpc>": "[Music]",
+      "class<spotify>": "[Spotify]",
+      "class<steam>": "[Steam]",
+      "class<firefox>": "[Firefox]",
+      "class<org.mozilla.firefox>": "[Firefox]",
+      "class<chromium>": "[Chrome]",
+      "class<google-chrome>": "[Chrome]",
+      "class<brave-browser>": "[Brave]",
+      "class<qutebrowser>": "[Qute]",
+      "class<org.qutebrowser.qutebrowser>": "[Qute]",
+      "class<code>": "[Code]",
+      "class<Code>": "[Code]",
+      "class<obsidian>": "[Obsidian]",
+      "class<slack>": "[Slack]",
+      "class<telegram>": "[Telegram]",
+      "class<vlc>": "[VLC]",
+      "class<mpv>": "[MPV]",
+      "class<obs>": "[OBS]",
+      "class<gimp>": "[GIMP]",
+      "class<pavucontrol>": "[Audio]",
+      "class<org.pulseaudio.pavucontrol>": "[Audio]",
+      "class<blueman-manager>": "[Bluetooth]",
+      "class<org.kde.kate>": "[Kate]",
+      "class<org.kde.konsole>": "[Term]",
+      "class<libreoffice>": "[Office]",
+      "class<eog>": "[Images]",
+      "class<org.gnome.Nautilus>": "[Files]"
+    },
+    "persistent-workspaces": {
+      "*": 4
+    },
+    "on-scroll-up": "hyprctl dispatch workspace e-1",
+    "on-scroll-down": "hyprctl dispatch workspace e+1"
+  },
+
+  // App Launcher
+  "custom/appmenu": {
+    "format": "",
+    "on-click": "sleep 0.2;anchovy",
+    "tooltip-format": "Application Launcher"
+  },
+
+  // CPU
+  "cpu": {
+    "interval": 1,
+    "format": "<span color='#89b4fa'></span>  {usage}%",
+    "on-click": "ghostty -e btop"
+  },
+
+  // Memory
+  "memory": {
+    "interval": 1,
+    "format": "{used:0.1f}/{total:0.1f} GiB",
+    "on-click": "ghostty -e btop",
+    "tooltip-format": "{used}/{total} GiB"
+  },
+
+  // Network Speed
+  "network#speed": {
+    "interval": 1,
+    "format-wifi": "<span color='#a6e3a1'>  </span>{bandwidthDownBytes} <span color='#f38ba8'>  </span>{bandwidthUpBytes}",
+    "format-ethernet": "<span color='#a6e3a1'>  </span>{bandwidthDownBytes} <span color='#f38ba8'>  </span>{bandwidthUpBytes}",
+    "format-disconnected": "󰌙",
+    "tooltip-format": "{ipaddr}",
+    "max-length": 22,
+    "min-length": 20
+  },
+
+  // Clock
+  "clock": {
+    "format": "{:%I:%M %p / %h %d}",
+    "tooltip": true,
+    "tooltip-format": "<tt>{calendar}</tt>"
+  },
+
+  // System tray
+  "tray": {
+    "icon-size": 12,
+    "spacing": 12
+  },
+
+  // Weather
+  "custom/weather": {
+    "format": "{}",
+    "exec": "~/.config/waybar/scripts/weather.sh",
+    "interval": 600,
+    "tooltip-format": "Weather in Boston, MA"
+  },
+
+  // Pulseaudio
+  "pulseaudio": {
+    "scroll-step": 5,
+    "format": "{icon} {volume}%",
+    "format-muted": " muted",
+    "format-icons": {
+      "default": ["", "", ""]
+    },
+    "on-click": "pavucontrol",
+    "on-click-right": "pamixer -t",
+    "tooltip": true,
+    "tooltip-format": "{volume}% | {desc}"
+  },
+
+  // Network
+  "network": {
+    "format-wifi": "{icon}",
+    "format-ethernet": "󰈀",
+    "format-icons": ["󰤯 ", "󰤟 ", "󰤢 ", "󰤢 ", "󰤨 "],
+    "format-disconnected": "󰪎 ",
+    "interval": 5,
+    "tooltip-format-wifi": "{essid} | {signalStrength}%",
+    "tooltip-format-disconnected": "Disconnected"
+  },
+
+  // Media Player
+  "custom/media": {
+    "format": "{}",
+    "exec": "playerctl metadata --format '{{ artist }} - {{ title }}' --follow 2>/dev/null | sed -u 's/&/&amp;/g'",
+    "max-length": 40,
+    "on-click": "playerctl play-pause",
+    "on-scroll-up": "playerctl next",
+    "on-scroll-down": "playerctl previous",
+    "tooltip": false
+  },
+
+  // Cachy/Arch updates indicator
+  "custom/updates": {
+    "format": "{}",
+    "exec": "~/.config/waybar/scripts/check-updates.sh",
+    "interval": 600,
+    "return-type": "json",
+    "on-click": "cachy-update",
+    "tooltip": true
+  },
+
+  // Power Menu
+  "custom/exit": {
+    "format": "Power",
+    "on-click": "~/.config/waybar/scripts/power-menu.sh",
+    "tooltip-format": "Power Menu"
+  }
+}

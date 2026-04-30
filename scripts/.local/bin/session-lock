@@ -1,0 +1,9 @@
+#!/bin/bash
+# Compositor-aware lock
+if [ -n "$SWAYSOCK" ]; then
+    exec swaylock-effects -e -K -p 10 -f --font Hack-Regular
+elif [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+    exec hyprlock
+else
+    exec swaylock-effects -e -K -p 10 -f --font Hack-Regular
+fi

@@ -20,6 +20,9 @@ cd "$DOTFILES"
 
 # Stow all packages
 STOW_PACKAGES=(
+    sway
+    waybar
+    wlogout
     browser
     fetch
     input-remapper
