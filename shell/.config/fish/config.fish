@@ -1,5 +1,10 @@
 source /usr/share/cachyos-fish-config/cachyos-config.fish
 
+# Clean up stale SWAYSOCK from a prior sway session (avoids fastfetch/neofetch IPC errors)
+if set -q SWAYSOCK; and not test -S "$SWAYSOCK"
+    set -e SWAYSOCK
+end
+
 # Initialize Starship prompt
 starship init fish | source
 
