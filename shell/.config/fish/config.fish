@@ -1,9 +1,10 @@
-source /usr/share/cachyos-fish-config/cachyos-config.fish
-
-# Clean up stale SWAYSOCK from a prior sway session (avoids fastfetch/neofetch IPC errors)
+# Clean up stale SWAYSOCK from a prior sway session (must run BEFORE sourcing
+# cachyos-config.fish — its done.fish plugin probes sway via swaymsg)
 if set -q SWAYSOCK; and not test -S "$SWAYSOCK"
     set -e SWAYSOCK
 end
+
+source /usr/share/cachyos-fish-config/cachyos-config.fish
 
 # Initialize Starship prompt
 starship init fish | source
@@ -47,5 +48,5 @@ alias lofi="lofi-tui"
 
 # overwrite greeting with neofetch cat
 function fish_greeting
-    neofetch 2>/dev/null
+    env -u SWAYSOCK -u I3SOCK neofetch
 end
