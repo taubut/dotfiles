@@ -42,5 +42,5 @@ alias lofi="lofi-tui"
 
 # overwrite greeting with neofetch cat
 function fish_greeting
-    neofetch
+    neofetch 2>/dev/null
 end
