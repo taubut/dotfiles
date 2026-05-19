@@ -7,26 +7,26 @@ description = "Dynamic colors from wallpaper"
 variant = "dark"
 
 [colors.core]
-background = "#212124"
-foreground = "#EBE7E9"
-secondary_background = "#47474B"
-border = "#999497"
-accent = "#8195AF"
+background = "#2E2D2D"
+foreground = "#DEE3DF"
+secondary_background = "#535252"
+border = "#8B908C"
+accent = "#406B8D"
 
 [colors.accents]
-blue = "#8195AF"
-green = "#585A75"
-magenta = "#8FC1C2"
-orange = "#9D82A2"
-purple = "#8FC1C2"
-red = "#1E2031"
-yellow = "#9D82A2"
-cyan = "#C7BAC1"
+blue = "#406B8D"
+green = "#9D3B37"
+magenta = "#D3760C"
+orange = "#646942"
+purple = "#D3760C"
+red = "#322C2C"
+yellow = "#646942"
+cyan = "#A0AEA3"
 
 [colors.list.item.selection]
-background = { name = "#8195AF", opacity = 0.3 }
-secondary_background = "#999497"
-foreground = "#8195AF"
+background = { name = "#406B8D", opacity = 0.3 }
+secondary_background = "#8B908C"
+foreground = "#406B8D"
 
 [colors.list.item.hover]
-background = { name = "#8195AF", opacity = 0.15 }
+background = { name = "#406B8D", opacity = 0.15 }
