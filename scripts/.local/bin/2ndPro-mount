@@ -1,6 +1,21 @@
 #!/bin/bash
 # Mount 2ndPro NTFS drive
 
+# --- Plex music SMB share (for MPD/rmpc ~/Music) ---
+# User-level gvfs mount; NO sudo (must run as the logged-in user).
+# Needs the SMB password saved in the keyring to be non-interactive
+# (pick "remember forever" the first time gio prompts).
+PLEX_GVFS="/run/user/$(id -u)/gvfs/smb-share:server=plex.local,share=data,user=taubut"
+if [[ -d "$PLEX_GVFS" ]]; then
+    echo "Plex music share already mounted (~/Music)"
+else
+    if gio mount 'smb://taubut@plex.local/data'; then
+        echo "Plex music share mounted (~/Music)"
+    else
+        echo "WARNING: failed to mount Plex music share (check keyring/password)"
+    fi
+fi
+
 UUID="840048A400489F54"
 MOUNT_POINT="/mnt/2ndPro"
 
