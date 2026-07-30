@@ -1,143 +1,155 @@
 #!/usr/bin/env bash
 # =============================================================================
-# pre-wipe-backup — FULL mirror of your entire home to the NAS before a wipe.
+# pre-wipe-backup — back up your Linux install to the NAS before a wipe.
 # =============================================================================
-# Copies ALL of $HOME (Faugus/WoW, projects, Games, Downloads, browser profiles,
-# dotfiles, keys, .config, .claude — everything) to a clean, browsable folder on
-# the Unraid NAS, plus a self-contained restore-from-nas.sh + README. Nothing is
-# cherry-picked. You have 12 TB; we use it.
+# MENU:
+#   1) Home            full ~/ mirror                 → CachyOS-FreshStart/home
+#   2) EVERYTHING ELSE all of / EXCEPT home (sudo)    → CachyOS-FreshStart/root
+#   3) Whole drive     1 + 2
 #
-#   pre-wipe-backup             mirror everything (skips only the ~/Music Plex share)
-#   pre-wipe-backup --with-music  ALSO copy ~/Music (your Plex library — huge/redundant)
-#   pre-wipe-backup --dry-run    show what would copy, change nothing
+# home/ + root/ together = a copy of LITERALLY EVERY FILE on your Linux drive,
+# except the handful that can't/shouldn't be copied:
+#   • /dev /proc /sys /run  — kernel-virtual, not real files
+#   • /mnt /media           — the NAS itself + your other mounted drives
+#   • /tmp /var/tmp         — scratch, wiped on boot anyway
+#   • lost+found, swapfile
 #
-# The ONLY thing skipped by default is ~/Music — it's a network mount to your
-# Plex server (already safe there, not local data). Pass --with-music to include it.
+# Flags: --home  --system  --everything  |  --dry-run  --with-music
+# No args = menu.  The system backup needs sudo (most of / is root-owned).
 # =============================================================================
 set -uo pipefail
 
 NAS_MNT="/mnt/unraid-backup"
 DEST="$NAS_MNT/CachyOS-FreshStart"
-DRY=0; MUSIC=0
+DRY=0; MUSIC=0; CHOICE=""
 for a in "$@"; do case "$a" in
+  --home) CHOICE="home" ;; --system) CHOICE="system" ;; --everything) CHOICE="all" ;;
   --dry-run) DRY=1 ;; --with-music) MUSIC=1 ;;
-  -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
   *) echo "unknown arg: $a"; exit 2 ;;
 esac; done
 
 say(){ printf '%s\n' "$*"; }
 hr(){ printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
 
-# --- SAFETY: NAS must be mounted (don't silently fill the local disk) --------
-if ! findmnt "$NAS_MNT" >/dev/null 2>&1; then
-  say "✗ NAS not mounted at $NAS_MNT — mount it first:  sudo mount $NAS_MNT"
-  exit 1
-fi
-say "✓ NAS mounted: $(findmnt -no SOURCE "$NAS_MNT")"
-say "  Destination: $DEST/home  (full mirror of \$HOME)"
-[ "$DRY" = 1 ] && say "  (DRY RUN — nothing will be copied)"
+findmnt "$NAS_MNT" >/dev/null 2>&1 || { say "✗ NAS not mounted at $NAS_MNT — run: sudo mount $NAS_MNT"; exit 1; }
 
-# rsync flags: archive + hardlinks; -a keeps symlinks AS symlinks (so the ~/Music
-# symlink won't drag in the whole Plex share). --no-owner/--no-group because the
-# Unraid NFS share squashes ownership (chgrp fails); --no-D skips runtime sockets.
-# Restore re-derives ownership; keys keep real perms via the tarball. No --delete.
-RSYNC=(rsync -a --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
-EXCLUDES=()
-[ "$MUSIC" = 0 ] && EXCLUDES+=(--exclude='/Music')
-[ "$DRY" = 1 ] && RSYNC+=(--dry-run)
-
-hr "Mirroring entire home → NAS"
-say "  This is large (Faugus alone is ~53G) — let it run."
-mkdir -p "$DEST/home" 2>/dev/null || true
-# rsync may exit 23/24 (a file vanished / perms) while copying a live home — that's OK.
-"${RSYNC[@]}" "${EXCLUDES[@]}" "$HOME/" "$DEST/home/"
-rc=$?
-case $rc in
-  0)  say "  ✓ mirror complete (clean)";;
-  23) say "  ✓ mirror complete (some files unreadable/skipped — usually caches/sockets)";;
-  24) say "  ✓ mirror complete (some files changed during copy — normal for a live home)";;
-  *)  say "  ! rsync exit $rc — review output above";;
-esac
-
-if [ "$DRY" = 0 ]; then
-  hr "Key permission safety-net (tarred, perms guaranteed)"
+# ---------------------------------------------------------------------------
+backup_home() {
+  hr "HOME — full mirror of \$HOME  → $DEST/home"
+  local RSYNC=(rsync -a --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
+  local EX=(); [ "$MUSIC" = 0 ] && EX+=(--exclude='/Music')
+  [ "$DRY" = 1 ] && RSYNC+=(--dry-run)
+  mkdir -p "$DEST/home" 2>/dev/null || true
+  "${RSYNC[@]}" "${EX[@]}" "$HOME/" "$DEST/home/"
+  case $? in 0) say "  ✓ home complete";; 23|24) say "  ✓ home complete (minor attr/vanished skips)";; *) say "  ! rsync issue — re-run to finish";; esac
+  [ "$DRY" = 1 ] && return
+  hr "Keys (tarred, perms guaranteed)"
   mkdir -p "$DEST/keys"
   [ -d "$HOME/.ssh" ]   && tar czf "$DEST/keys/ssh.tar.gz"   -C "$HOME" .ssh   && say "  ✓ keys/ssh.tar.gz"
   [ -d "$HOME/.gnupg" ] && tar czf "$DEST/keys/gnupg.tar.gz" -C "$HOME" .gnupg && say "  ✓ keys/gnupg.tar.gz"
-
-  hr "System state (groups, services, packages — so HARDWARE comes back too)"
+  hr "System-state lists (quick reference)"
   mkdir -p "$DEST/system-state"
-  # group memberships — e.g. plugdev (Razer Naga), input (input-remapper)
-  id -nG > "$DEST/system-state/groups.txt" 2>/dev/null \
-    && say "  ✓ groups.txt [$(id -nG | tr ' ' '\n' | grep -iE 'plugdev|input|razer' | tr '\n' ' ')…]"
-  # every systemd service you had enabled (input-remapper, openrazer-daemon, …)
-  systemctl list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' \
-    > "$DEST/system-state/services-system.txt" && say "  ✓ services-system.txt"
-  systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' \
-    > "$DEST/system-state/services-user.txt" && say "  ✓ services-user.txt"
+  id -nG > "$DEST/system-state/groups.txt" 2>/dev/null && say "  ✓ groups.txt"
+  systemctl list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' > "$DEST/system-state/services-system.txt" && say "  ✓ services-system.txt"
+  systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' > "$DEST/system-state/services-user.txt" && say "  ✓ services-user.txt"
   pacman -Qqe > "$DEST/system-state/packages-explicit.txt" 2>/dev/null && say "  ✓ packages-explicit.txt"
-  cp /etc/fstab "$DEST/system-state/fstab.txt" 2>/dev/null && say "  ✓ fstab.txt"
+}
 
-  hr "restore script + readme + manifest"
+# ---------------------------------------------------------------------------
+backup_system() {
+  hr "EVERYTHING ELSE — all of / except home  → $DEST/root"
+  say "  Excluding only: /dev /proc /sys /run (kernel-virtual) · /mnt /media (NAS + other drives)"
+  say "  · /tmp /var/tmp (scratch) · lost+found · swap · /home (backed up separately)"
+  say "  (needs sudo — most of / is root-owned)"
+  sudo -v || { say "  ✗ sudo required for the system backup"; return 1; }
+  mkdir -p "$DEST/root"
+  local FL=(-a --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
+  [ "$DRY" = 1 ] && FL+=(--dry-run)
+  local EX=(
+    --exclude='/dev/*'  --exclude='/proc/*' --exclude='/sys/*' --exclude='/run/*'
+    --exclude='/tmp/*'  --exclude='/var/tmp/*'
+    --exclude='/mnt/*'  --exclude='/media/*'
+    --exclude='/lost+found' --exclude='/swapfile' --exclude='/swap.img'
+    --exclude='/home/*'
+  )
+  sudo rsync "${FL[@]}" "${EX[@]}" / "$DEST/root/"
+  case $? in 0) say "  ✓ system complete";; 23|24) say "  ✓ system complete (minor attr/in-use-file skips)";; *) say "  ! rsync issue — re-run to finish";; esac
+}
+
+# ---------------------------------------------------------------------------
+write_meta() {
+  [ "$DRY" = 1 ] && return
+  hr "restore helper + readme + manifest"
+  cp /etc/fstab "$DEST/system-state/fstab.txt" 2>/dev/null || true
   cat > "$DEST/restore-from-nas.sh" <<'RESTORE'
 #!/usr/bin/env bash
-# Restore the full home mirror onto a fresh machine.
-# Run it off the NAS (or copy this folder local first), then reboot.
+# Restore your files on a fresh machine. Run from inside this backup folder.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 say(){ printf '%s\n' "$*"; }
-say "Restoring full home from: $HERE/home  → $HOME"
-read -rp "This overwrites files in $HOME with the backup. Continue? [y/N] " a
-[[ "$a" =~ ^[Yy]$ ]] || { say "aborted"; exit 1; }
-
-rsync -a --no-owner --no-group --no-D --info=progress2 --human-readable "$HERE/home/" "$HOME/"
-
-# key permission safety (in case the NAS filesystem squashed them)
-[ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh"   2>/dev/null; chmod 600 "$HOME/.ssh/"* 2>/dev/null; }
+say "Restoring HOME from $HERE/home → $HOME"
+read -rp "This overwrites files in \$HOME with the backup. Continue? [y/N] " a
+[[ "$a" =~ ^[Yy]$ ]] || exit 1
+rsync -a --no-owner --no-group --no-D --info=progress2 "$HERE/home/" "$HOME/"
+[ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh" 2>/dev/null; chmod 600 "$HOME/.ssh/"* 2>/dev/null; }
 [ -f "$HERE/keys/gnupg.tar.gz" ] && { tar xzf "$HERE/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 "$HOME/.gnupg" 2>/dev/null; }
-
 say ""
-say "Home restored. Now finish the system (programs + hardware):"
-say "    cd ~/dotfiles && ./fresh-start.sh --packages   # reinstall your programs"
-say "    cd ~/dotfiles && ./fresh-start.sh --system     # groups (Razer plugdev / input-remapper) + services"
-say "Then LOG OUT/IN — group changes need it (Razer Naga, input-remapper)."
+say "HOME restored. Reinstall programs:  cd ~/dotfiles && ./fresh-start.sh --packages"
+say "Groups/services:                    ./fresh-start.sh --system"
+say ""
+say "root/ is a COMPLETE REFERENCE COPY of your old system (/etc, /usr, /var, /opt,"
+say "/root, /boot). Do NOT dump it wholesale over a fresh install — cherry-pick what"
+say "you need from it (e.g. cp root/etc/systemd/system/numlock.service back), then"
+say "  sudo cp -a root/usr/local/. /usr/local/    # your custom scripts/binaries"
 RESTORE
   chmod +x "$DEST/restore-from-nas.sh"
-
   cat > "$DEST/README.txt" <<'README'
-CachyOS FULL backup — a complete mirror of ~/ (home directory)
-==============================================================
-Everything you had is under  home/  in its original layout: Faugus (WoW/EQ),
-projects, Games, Downloads, dotfiles, keys, .config, .claude, browser profiles…
-The only default omission is ~/Music (your Plex network share, safe on the server).
+CachyOS full backup
+===================
+  home/          complete mirror of ~/ (everything under /home/taubut, minus ~/Music)
+  root/          complete copy of the rest of / — /etc, /usr, /var, /opt, /root, /boot,
+                 /usr/local, systemd units, everything. (Excludes /mnt, /media, /dev,
+                 /proc, /sys, /run, /tmp — the NAS, other drives, and kernel-virtual dirs.)
+  keys/          ssh + gnupg (tarred, perms preserved) — KEEP PRIVATE
+  system-state/  groups, enabled services, package list, fstab (quick reference)
 
-Restore on a fresh CachyOS install:
-  1. Install CachyOS (KDE Plasma). Mount this NAS (or copy this folder over).
-  2. ./restore-from-nas.sh            # mirrors home/ back into ~, restores key perms
-  3. cd ~/dotfiles && ./fresh-start.sh --packages   # reinstall your programs
-  4. cd ~/dotfiles && ./fresh-start.sh --system     # groups (Razer 'plugdev', input-remapper) + services
-  5. LOG OUT/IN (group changes need it). Re-mount Plex for ~/Music.
-
-Shortcut: from a git clone of dotfiles you can just run  ./fresh-start.sh  and
-pick 'E' (EVERYTHING BACK) — it does packages + this restore + system in one go.
-system-state/ holds your captured groups, enabled services, package list, fstab.
-No GitHub required — your dotfiles + installer are in home/dotfiles/.
+home/ + root/ = every real file on your Linux drive. Restore: ./restore-from-nas.sh
+(brings home back); treat root/ as a reference to pull specific system files from.
 README
-
   {
-    echo "CachyOS FULL home backup"
-    echo "created: $(date '+%Y-%m-%d %H:%M:%S')   host: $(hostname)"
-    echo "music included: $([ "$MUSIC" = 1 ] && echo yes || echo 'no (Plex share)')"
-    echo
-    echo "top-level sizes under home/:"
-    du -sh "$DEST"/home/* 2>/dev/null | sort -rh | head -40
-    echo; echo "grand total: $(du -sh "$DEST" 2>/dev/null | cut -f1)"
-  } > "$DEST/MANIFEST.txt"
-  say "  ✓ wrote restore-from-nas.sh, README.txt, MANIFEST.txt"
+    echo "backup created: $(date '+%Y-%m-%d %H:%M:%S')  host: $(hostname)"
+    echo; echo "top-level sizes:"; du -sh "$DEST"/* 2>/dev/null
+  } > "$DEST/MANIFEST.txt" 2>/dev/null || true
+  say "  ✓ restore-from-nas.sh, README.txt, MANIFEST.txt"
+}
+
+# ---------------------------------------------------------------------------
+run() { case "$1" in
+    home)   backup_home; write_meta ;;
+    system) backup_system; write_meta ;;
+    all)    backup_home; backup_system; write_meta ;;
+  esac; }
+
+if [ -n "$CHOICE" ]; then run "$CHOICE"
+else
+  cat <<EOF
+
+  What do you want to back up?  (NAS: $(df -h --output=avail "$NAS_MNT" | tail -1 | tr -d ' ') free)
+  ────────────────────────────────────────────────────────────
+   1) Home            full ~/ mirror              → home/
+   2) EVERYTHING ELSE all of / except home (sudo) → root/     ← the rest of your drive
+   3) Whole drive     1 + 2
+   q) quit
+  ────────────────────────────────────────────────────────────
+EOF
+  read -rp "  choose: " c
+  case "${c,,}" in
+    1) run home ;; 2) run system ;; 3) run all ;;
+    *) say "  nothing done."; exit 0 ;;
+  esac
 fi
 
-hr "done"
-[ "$DRY" = 1 ] && { say "Dry run complete — nothing copied."; exit 0; }
-say "Backup folder: $DEST"
-say "Total on NAS:  $(du -sh "$DEST" 2>/dev/null | cut -f1)"
-say "Restore later: run  $DEST/restore-from-nas.sh  on the fresh machine."
+say ""
+say "Done.  Backup folder: $DEST"
+say "Restore later:  $DEST/restore-from-nas.sh"
