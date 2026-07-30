@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# backup-menu — interactive CHECKBOX picker for NAS backups (run in YOUR terminal)
+# backup-menu — interactive picker for NAS backups (run in YOUR terminal)
 # =============================================================================
-# Toggle items on/off, then Enter to start. Runs each selected target in
-# sequence (never in parallel) via pre-wipe-backup / drive-backup, with clean
-# single-line % progress, then offers a checksum verify for the drives.
-# Resumable — safe to Ctrl-C and re-run. LAN transfer; internet-independent.
+# ↑/↓ (or j/k) move · SPACE toggles · number toggles that row · a = all/none ·
+# ENTER starts · q quits. Runs each selected target in sequence (never parallel)
+# via pre-wipe-backup / drive-backup, clean single-line % progress, then offers
+# a checksum verify for the drives. Resumable. LAN transfer; internet-independent.
 # =============================================================================
 set -uo pipefail
 
@@ -24,50 +24,57 @@ for spec in \
 done
 N=${#TARGETS[@]}
 
-# is a home backup already running (in another terminal)?
 HOME_RUNNING=0
 pgrep -f 'rsync.*CachyOS-FreshStart' >/dev/null 2>&1 && HOME_RUNNING=1
-
-# selection state (0/1 per target)
-SEL=(); for ((i=0; i<N; i++)); do SEL+=(0); done
-
-used_of(){ df -h --output=used "$1" 2>/dev/null | tail -1 | tr -d ' '; }
 FREE="$(df -h --output=avail "$NAS_MNT" 2>/dev/null | tail -1 | tr -d ' ')"
 
+# precompute used-space per target (once, so redraws are instant)
+SEL=(); USED=()
+for ((i=0; i<N; i++)); do
+  SEL+=(0)
+  IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"
+  [ "$type" = drive ] && USED+=("$(df -h --output=used "$src" 2>/dev/null | tail -1 | tr -d ' ')") || USED+=("-")
+done
+
+cursor=0
 draw(){
-  printf '\033[H\033[J'   # clear screen, cursor home
+  printf '\033[H\033[J'
   echo
-  echo "  Backup picker — check off what you want   (NAS: $FREE free)"
-  echo "  ──────────────────────────────────────────────────────────────────"
-  local i type lbl src nm box extra
+  echo "  Backup picker   ↑/↓ move · SPACE check · ENTER start · q quit   (NAS: $FREE free)"
+  echo "  ──────────────────────────────────────────────────────────────────────"
+  local i type lbl src nm box line
   for ((i=0; i<N; i++)); do
     IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"
     box="[ ]"; [ "${SEL[$i]}" = 1 ] && box="[✓]"
     if [ "$type" = home ]; then
-      extra=""; [ "$HOME_RUNNING" = 1 ] && extra="   ⏳ already running elsewhere"
-      printf "   %s  %d) %-40s → CachyOS-FreshStart/home%s\n" "$box" "$((i+1))" "$lbl" "$extra"
+      line=$(printf "%s  %-40s → CachyOS-FreshStart/home%s" "$box" "$lbl" "$([ "$HOME_RUNNING" = 1 ] && printf '  ⏳ running elsewhere')")
     else
-      printf "   %s  %d) %-26s (%6s used) → windows-backup/%s\n" "$box" "$((i+1))" "$lbl" "$(used_of "$src")" "$nm"
+      line=$(printf "%s  %-26s (%6s) → windows-backup/%s" "$box" "$lbl" "${USED[$i]}" "$nm")
     fi
+    if [ "$i" = "$cursor" ]; then printf "  \033[7m ❯ %s \033[0m\n" "$line"
+    else printf "     %s\n" "$line"; fi
   done
-  echo "  ──────────────────────────────────────────────────────────────────"
-  echo "   type a number = toggle   ·   a = all/none   ·   Enter = start   ·   q = quit"
+  echo "  ──────────────────────────────────────────────────────────────────────"
+  echo "   a = check/uncheck all"
 }
 
-# --- selection loop ----------------------------------------------------------
+# --- selection loop (arrow keys / space / numbers) ---------------------------
 while true; do
   draw
-  read -rp "  > " k
-  case "${k,,}" in
-    q)  echo "  cancelled."; exit 0 ;;
-    "") break ;;
-    a)  allsel=1; for ((i=0; i<N; i++)); do [ "${SEL[$i]}" = 1 ] || allsel=0; done
-        for ((i=0; i<N; i++)); do [ "$allsel" = 1 ] && SEL[$i]=0 || SEL[$i]=1; done ;;
-    *)  if [[ "$k" =~ ^[0-9]+$ ]] && [ "$k" -ge 1 ] && [ "$k" -le "$N" ]; then
-          idx=$((k-1)); [ "${SEL[$idx]}" = 1 ] && SEL[$idx]=0 || SEL[$idx]=1
-        fi ;;
+  IFS= read -rsn1 key
+  if [[ "$key" == $'\x1b' ]]; then IFS= read -rsn2 -t 0.05 rest || true; key+="${rest:-}"; fi
+  case "$key" in
+    $'\x1b[A'|k|K) if ((cursor>0)); then ((cursor--)); else cursor=$((N-1)); fi ;;
+    $'\x1b[B'|j|J) if ((cursor<N-1)); then ((cursor++)); else cursor=0; fi ;;
+    ' ')  SEL[$cursor]=$((1-${SEL[$cursor]})) ;;
+    [1-9]) if [ "$key" -ge 1 ] && [ "$key" -le "$N" ]; then cursor=$((key-1)); SEL[$cursor]=$((1-${SEL[$cursor]})); fi ;;
+    a|A)  allsel=1; for ((i=0; i<N; i++)); do [ "${SEL[$i]}" = 1 ] || allsel=0; done
+          for ((i=0; i<N; i++)); do [ "$allsel" = 1 ] && SEL[$i]=0 || SEL[$i]=1; done ;;
+    q|Q)  printf '\033[H\033[J'; echo "  cancelled."; exit 0 ;;
+    ''|$'\n'|$'\r') break ;;
   esac
 done
+printf '\033[H\033[J'
 
 # --- collect + confirm -------------------------------------------------------
 chosen=(); for ((i=0; i<N; i++)); do [ "${SEL[$i]}" = 1 ] && chosen+=("$i"); done
@@ -81,7 +88,7 @@ for i in "${chosen[@]}"; do
   fi
 done
 
-echo; echo "  Will back up (one at a time, in order):"
+echo "  Will back up (one at a time, in order):"
 for i in "${chosen[@]}"; do IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"; echo "    • $lbl"; done
 [ "$HOME_RUNNING" = 1 ] && echo "  Note: a home backup is running elsewhere — these will share NAS bandwidth."
 read -rp "  Proceed? [y/N] " ok
