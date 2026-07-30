@@ -61,6 +61,84 @@ stage_restore() {
 }
 
 # -----------------------------------------------------------------------------
+# Granular restore: pick exactly what comes back (arrow keys / space / enter).
+stage_restore_pick() {
+    hr "Pick what to restore from the NAS"
+    findmnt /mnt/unraid-backup >/dev/null 2>&1 || { warn "NAS not mounted — sudo mount /mnt/unraid-backup"; return; }
+    [ -d "$NAS/home" ] || { warn "no home backup at $NAS/home (run pre-wipe-backup first)"; return; }
+
+    local CATS=(
+      "Full home — EVERYTHING (ignores the picks below)|FULL"
+      "input-remapper (Naga button mappings)|.config/input-remapper-2"
+      "KDE / Plasma settings + shortcuts|.config/kglobalshortcutsrc .config/kwinrc .config/kwinrulesrc .config/plasmarc .config/plasmashellrc .config/kdeglobals .config/plasma-org.kde.plasma.desktop-appletsrc .config/khotkeysrc .config/kscreenlockerrc .config/kactivitymanagerdrc .local/share/plasma .local/share/aurorae"
+      "Shell + terminal (fish/zsh/ghostty/starship)|.zshrc .bashrc .bash_profile .p10k.zsh .config/fish .config/ghostty .config/starship.toml"
+      "Audio config (fluidsynth/beacn/autostart)|.config/fluidsynth .config/systemd .config/autostart"
+      "Soundfont (EQ music ~178M)|.local/share/soundfonts"
+      "Anchovy launcher settings|.local/share/anchovy anchovy-new"
+      "SSH + GPG keys|KEYS"
+      "Claude memories/conversations (~/.claude)|.claude"
+      "Wallpapers|Pictures/Wallpapers Videos/Wallpapers"
+      "Documents / Pictures / Videos|Documents Pictures Videos"
+      "Code projects|projects Projects git-work pokefirered-custom"
+      "Games folder|Games"
+      "Downloads|Downloads"
+      "Faugus — WoW/EQ + Wine prefixes (BIG ~53G)|Faugus"
+    )
+    local n=${#CATS[@]} SEL=() cur=0 i key r
+    for ((i=0; i<n; i++)); do SEL+=(0); done
+
+    while true; do
+        printf '\033[H\033[J'
+        echo; echo "  Restore picker   ↑/↓ move · SPACE check · ENTER restore · q cancel"
+        echo "  (from $NAS/home)"
+        echo "  ────────────────────────────────────────────────────────────"
+        for ((i=0; i<n; i++)); do
+            local lbl="${CATS[$i]%%|*}" box="[ ]"
+            [ "${SEL[$i]}" = 1 ] && box="[✓]"
+            if [ "$i" = "$cur" ]; then printf "  \033[7m ❯ %s %s \033[0m\n" "$box" "$lbl"
+            else printf "     %s %s\n" "$box" "$lbl"; fi
+        done
+        echo "  ────────────────────────────────────────────────────────────"
+        echo "   a = all/none"
+        IFS= read -rsn1 key
+        [[ "$key" == $'\x1b' ]] && { IFS= read -rsn2 -t 0.05 r || true; key+="${r:-}"; }
+        case "$key" in
+            $'\x1b[A'|k|K) if ((cur>0)); then ((cur--)); else cur=$((n-1)); fi ;;
+            $'\x1b[B'|j|J) if ((cur<n-1)); then ((cur++)); else cur=0; fi ;;
+            ' ')  SEL[$cur]=$((1-${SEL[$cur]})) ;;
+            a|A)  local as=1; for ((i=0;i<n;i++)); do [ "${SEL[$i]}" = 1 ] || as=0; done
+                  for ((i=0;i<n;i++)); do [ "$as" = 1 ] && SEL[$i]=0 || SEL[$i]=1; done ;;
+            q|Q)  printf '\033[H\033[J'; warn "cancelled — nothing restored"; return ;;
+            ''|$'\n'|$'\r') break ;;
+        esac
+    done
+    printf '\033[H\033[J'
+
+    local RS=(rsync -aHR --no-owner --no-group --no-D --info=progress2 --human-readable)
+    local any=0
+    for ((i=0; i<n; i++)); do
+        [ "${SEL[$i]}" = 1 ] || continue
+        any=1
+        local lbl="${CATS[$i]%%|*}" paths="${CATS[$i]#*|}" rel
+        printf '\n\033[1m══ %s ══\033[0m\n' "$lbl"
+        if [ "$paths" = FULL ]; then
+            rsync -aH --no-owner --no-group --no-D --info=progress2 --human-readable --exclude '/dotfiles/' "$NAS/home/" "$HOME/" && ok "full home restored"
+            break
+        elif [ "$paths" = KEYS ]; then
+            [ -f "$NAS/keys/ssh.tar.gz" ]   && { tar xzf "$NAS/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 ~/.ssh 2>/dev/null; chmod 600 ~/.ssh/* 2>/dev/null; ok "ssh keys"; }
+            [ -f "$NAS/keys/gnupg.tar.gz" ] && { tar xzf "$NAS/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 ~/.gnupg 2>/dev/null; ok "gnupg keys"; }
+        else
+            for rel in $paths; do
+                if [ -e "$NAS/home/$rel" ]; then "${RS[@]}" "$NAS/home/./$rel" "$HOME/" && ok "$rel"
+                else warn "$rel — not in backup, skipped"; fi
+            done
+        fi
+    done
+    [ "$any" = 0 ] && { warn "nothing selected"; return; }
+    echo; ok "restore done — also run '--system' (groups+services) and LOG OUT/IN"
+}
+
+# -----------------------------------------------------------------------------
 stage_configs() {
     hr "Configs (stow — clean path only)"
     mkdir -p ~/.config ~/.local/bin ~/.local/share \
@@ -160,6 +238,7 @@ menu() {
   ┌─ fresh-start ──────────────────────────────────────────────┐
   │  E) EVERYTHING BACK  packages → restore home (NAS) → system │
   │  C) CLEAN REBUILD    packages → stow → apps → services      │
+  │  P) PICK what to restore (checklist from NAS)              │
   │  ── individual stages ──                                    │
   │  1) packages   2) restore-from-NAS   3) configs (stow)      │
   │  4) apps       5) system (groups+svc) 6) services           │
@@ -171,6 +250,7 @@ EOF
         case "${c,,}" in
             e) run_everything ;;
             c) run_clean ;;
+            p) stage_restore_pick ;;
             1) stage_packages ;;
             2) stage_restore ;;
             3) stage_configs ;;
@@ -189,6 +269,7 @@ case "${1:-}" in
     --clean|--all) run_clean ;;
     --packages) stage_packages ;;
     --restore)  stage_restore ;;
+    --pick)     stage_restore_pick ;;
     --configs)  stage_configs ;;
     --apps)     stage_apps ;;
     --system)   stage_system ;;
