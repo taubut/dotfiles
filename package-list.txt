@@ -331,7 +331,7 @@ beacn-utility
 catppuccinifier-bin
 catppuccin-sddm-theme-macchiato
 curseforge
-docker-compose-bin
+docker-compose
 durdraw
 dwproton-bin
 elephant
