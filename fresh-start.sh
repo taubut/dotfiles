@@ -28,6 +28,25 @@ pause(){ read -rp $'\n  \033[2m[Enter] next step · Ctrl-C to stop\033[0m ' _; }
 have_nas(){ findmnt /mnt/unraid-backup >/dev/null 2>&1 || { warn "NAS not mounted — sudo mount /mnt/unraid-backup"; return 1; }; }
 
 # ---------------------------------------------------------------------------
+s0_chat() {
+  hr "0 · Chat history — get back to THIS conversation FIRST"
+  have_nas || return
+  if [ -d "$NAS/home/.claude" ]; then
+    rsync -a --no-owner --no-group --no-D --info=progress2 "$NAS/home/.claude" "$HOME/" \
+      && ok "~/.claude restored (Claude Code history — incl. this rebuild convo + memory)"
+  else
+    warn "~/.claude not found in the backup"
+  fi
+  [ -f "$NAS/home/.claude.json" ] && { cp "$NAS/home/.claude.json" "$HOME/" 2>/dev/null && ok "~/.claude.json restored"; }
+  if command -v claude >/dev/null 2>&1; then
+    ok "Claude Code is installed — run 'claude' here and /resume to open this exact conversation"
+  else
+    warn "Claude Code not installed yet. Install it (e.g. npm i -g @anthropic-ai/claude-code),"
+    warn "then run 'claude' in this folder — your history, including this convo, will be right there."
+  fi
+}
+
+# ---------------------------------------------------------------------------
 s1_packages() {
   hr "1/7 · Packages"
   if command -v paru >/dev/null 2>&1 && [ -f "$DOTFILES/package-list.txt" ]; then
@@ -166,6 +185,7 @@ s6_final_check() {
 
 # ---------------------------------------------------------------------------
 rebuild() {
+  s0_chat;            pause
   s1_packages;        pause
   s2_configs;         pause
   s3_verify_configs;  pause
@@ -182,8 +202,9 @@ menu() {
     cat <<EOF
 
   ┌─ fresh-start · rebuild ─────────────────────────────────────┐
-  │  R) REBUILD — guided, all 7 steps in order (recommended)    │
+  │  R) REBUILD — guided, all steps in order (recommended)      │
   │  ── or a single step ──                                     │
+  │  0) chat history (get back to this convo FIRST)            │
   │  1) packages    2) configs      3) verify configs          │
   │  4) services    5) faugus/keybinds                          │
   │  6) final check 7) borg backup                              │
@@ -193,6 +214,7 @@ EOF
     read -rp "  choose: " c
     case "${c,,}" in
       r) rebuild ;;
+      0) s0_chat ;;
       1) s1_packages ;; 2) s2_configs ;; 3) s3_verify_configs ;;
       4) s4_services ;; 5) s5_faugus_keybinds ;;
       6) s6_final_check ;; 7) s7_borg ;;
@@ -204,6 +226,7 @@ EOF
 
 case "${1:-}" in
   --rebuild)  rebuild ;;
+  --chat)     s0_chat ;;
   --packages) s1_packages ;;
   --configs)  s2_configs ;;
   --verify)   s3_verify_configs ;;
