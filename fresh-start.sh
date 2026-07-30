@@ -150,6 +150,29 @@ s_plasma() {
 }
 
 # ---------------------------------------------------------------------------
+# GitHub login — so 'git push' to your dotfiles works. (Cloning/reading never
+# needs it since the repo is public.) Your gh token usually comes back with the
+# home restore; this tops it up if it's missing/expired.
+s_ghauth() {
+  hr "GitHub login (for pushing dotfile edits back)"
+  if ! command -v gh >/dev/null 2>&1; then warn "gh not installed yet — run step 1 (packages) first"; return; fi
+  if gh auth status >/dev/null 2>&1; then
+    ok "already logged in (your gh token came back with the home restore) — git push works"
+    return
+  fi
+  echo "  Not logged in (token missing or expired). Launching 'gh auth login'…"
+  echo "  Answer:  GitHub.com  →  HTTPS  →  Login with a web browser  → follow the on-screen code."
+  read -rp "  Log in now? [y/N] " a; [[ "${a,,}" == y* ]] || { warn "skipped — run 'gh auth login' anytime"; return; }
+  gh auth login
+  if gh auth status >/dev/null 2>&1; then
+    gh auth setup-git 2>/dev/null || true
+    ok "logged in — you can now 'git push' to your dotfiles"
+  else
+    warn "login didn't complete — just re-run 'gh auth login' when ready"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 s3_verify_configs() {
   hr "3/7 · Verify configs landed"
   local c miss=0
@@ -230,6 +253,7 @@ rebuild() {
   s0_chat;            pause
   s1_packages;        pause
   s2_configs;         pause
+  s_ghauth;           pause
   s3_verify_configs;  pause
   s4_services;        pause
   s5_faugus_keybinds; pause
@@ -264,6 +288,7 @@ EOF
       4) s4_services ;; 5) s5_faugus_keybinds ;;
       6) s6_final_check ;; 7) s7_borg ;;
       p) s_plasma ;;
+      g) s_ghauth ;;
       q|"") echo "  bye"; return 0 ;;
       *) warn "unknown choice: $c" ;;
     esac
@@ -278,6 +303,7 @@ case "${1:-}" in
   --verify)   s3_verify_configs ;;
   --services) s4_services ;;
   --plasma)   s_plasma ;;
+  --gh)       s_ghauth ;;
   --faugus)   s5_faugus_keybinds ;;
   --check)    s6_final_check ;;
   --borg)     s7_borg ;;
