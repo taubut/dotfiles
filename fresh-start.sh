@@ -60,11 +60,24 @@ s0_chat() {
 # ---------------------------------------------------------------------------
 s1_packages() {
   hr "1/7 · Packages"
+  # A fresh CachyOS can ship without an AUR helper. Bootstrap paru FIRST — else
+  # the install below is skipped entirely (and package-list.txt has AUR pkgs anyway).
+  # This needs only the internet, NOT the NAS.
+  if ! command -v paru >/dev/null 2>&1; then
+    echo "  No AUR helper found — installing paru first…"
+    sudo pacman -Sy --needed --noconfirm paru 2>/dev/null || {
+      warn "paru not in the repos — building paru-bin from the AUR…"
+      sudo pacman -S --needed --noconfirm git base-devel
+      local t; t="$(mktemp -d)"
+      git clone https://aur.archlinux.org/paru-bin.git "$t/paru-bin" && ( cd "$t/paru-bin" && makepkg -si --noconfirm )
+      rm -rf "$t"
+    }
+  fi
   if command -v paru >/dev/null 2>&1 && [ -f "$DOTFILES/package-list.txt" ]; then
-    echo "  Installing from package-list.txt…"
+    echo "  Installing from package-list.txt (repo + AUR — no NAS needed)…"
     grep -vE '^[[:space:]]*(#|$)' "$DOTFILES/package-list.txt" | paru -S --needed - || warn "some installs failed — see above"
   else
-    warn "paru or package-list.txt missing"
+    warn "couldn't get paru — install by hand:  paru -S --needed - < ~/dotfiles/package-list.txt"
   fi
   # what's in the list but did NOT install?
   local want got miss; want="$(mktemp)"; got="$(mktemp)"
