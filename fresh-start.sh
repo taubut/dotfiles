@@ -75,7 +75,10 @@ s1_packages() {
   fi
   if command -v paru >/dev/null 2>&1 && [ -f "$DOTFILES/package-list.txt" ]; then
     echo "  Installing from package-list.txt (repo + AUR — no NAS needed)…"
-    grep -vE '^[[:space:]]*(#|$)' "$DOTFILES/package-list.txt" | paru -S --needed - || warn "some installs failed — see above"
+    # Pass packages as ARGUMENTS (not piped stdin) so paru's interactive prompts
+    # — provider choices, conflict removals like jack2↔pipewire-jack — still work.
+    local pkgs; mapfile -t pkgs < <(grep -vE '^[[:space:]]*(#|$)' "$DOTFILES/package-list.txt")
+    paru -S --needed "${pkgs[@]}" || warn "some installs failed — see above"
   else
     warn "couldn't get paru — install by hand:  paru -S --needed - < ~/dotfiles/package-list.txt"
   fi
