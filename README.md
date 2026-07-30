@@ -13,6 +13,8 @@ My CachyOS rice with Catppuccin Macchiato + Flamingo theme.
 - **Fresh** - editor theme
 - **catfetch** - custom fetch script
 - **backup** - Borg backup script
+- **eq-fix** - relink EverQuest Legends' MIDI music to the Beacn Game dial ([notes](AUDIO-FIXES.md))
+- **beacn-fix** - recover audio after swapping the Beacn Mic's aux plug, no reboot ([notes](AUDIO-FIXES.md))
 
 ## Install
 

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# eq-fix — reconnect EverQuest Legends' MIDI music to the Beacn "Game" dial.
+#
+# Symptom it fixes: sound EFFECTS work but MUSIC is silent. EQ music is MIDI,
+# rendered by the fluidsynth user service; its audio output sometimes gets
+# orphaned onto the dead "BEACN Mix Create mono-fallback" sink (no jacks =
+# silence) instead of the "pipeweaver_game" node. This relinks it. Idempotent.
+#
+# Usage: eq-fix            (just run it)
+set -u
+
+TARGET="pipeweaver_game"
+say(){ printf '%s\n' "$*"; }
+
+command -v pw-link >/dev/null 2>&1 || { say "eq-fix: pw-link not found (PipeWire missing?)"; exit 1; }
+
+# 1. make sure the synth is running
+if ! systemctl --user is-active --quiet fluidsynth.service 2>/dev/null; then
+  say "eq-fix: fluidsynth.service wasn't running — starting it…"
+  systemctl --user start fluidsynth.service
+  sleep 2
+fi
+
+# 2. the Game node must exist (Beacn Utility provides it)
+if ! pw-link -i 2>/dev/null | grep -q "^${TARGET}:playback_FL"; then
+  say "eq-fix: '${TARGET}' not found — is the Beacn Utility running?"
+  say "        (try: systemctl --user start app-io.github.beacn_on_linux.beacn-utility@autostart.service )"
+  exit 1
+fi
+
+# 3. collect FluidSynth output ports (may be output_MONO, or output_FL/FR)
+mapfile -t FS_PORTS < <(pw-link -o 2>/dev/null | grep -E '^FluidSynth:')
+if [ "${#FS_PORTS[@]}" -eq 0 ]; then
+  say "eq-fix: no FluidSynth output ports found — synth not producing audio yet."
+  exit 1
+fi
+
+# 4. drop any existing FluidSynth output link that ISN'T already going to the target
+src=""
+while IFS= read -r line; do
+  case "$line" in
+    FluidSynth:*) src="${line%% *}" ;;                       # a source port header
+    *"|->"*)
+      dst="${line#*|-> }"; dst="${dst%% *}"                  # the destination it's linked to
+      if [ -n "$src" ] && [ "${dst%%:*}" != "$TARGET" ]; then
+        pw-link -d "$src" "$dst" 2>/dev/null && say "  unlinked  $src → $dst"
+      fi
+      ;;
+  esac
+done < <(pw-link -lo 2>/dev/null)
+
+# 5. ensure the correct links exist (add; ignore "already linked")
+link(){ pw-link "$1" "$2" 2>/dev/null && say "  linked    $1 → $2"; }
+for p in "${FS_PORTS[@]}"; do
+  case "$p" in
+    *:output_FL) link "$p" "${TARGET}:playback_FL" ;;
+    *:output_FR) link "$p" "${TARGET}:playback_FR" ;;
+    *)           link "$p" "${TARGET}:playback_FL"           # mono / anything else → both
+                 link "$p" "${TARGET}:playback_FR" ;;
+  esac
+done
+
+# 6. show the result
+say ""
+say "Done. FluidSynth now routes to:"
+pw-link -lo 2>/dev/null | grep -A3 -E '^FluidSynth:' | sed 's/^/  /'
+say ""
+say "▶  Music should be audible now (ride the Beacn GAME dial). If it's faint,"
+say "   nudge the in-game Music slider up (Options → Audio)."

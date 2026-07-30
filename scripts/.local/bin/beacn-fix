@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# beacn-fix — recover Beacn audio WITHOUT rebooting.
+#
+# Use when: you swapped what's plugged into the Beacn Mic's aux jack (e.g.
+# speakers <-> headphones) and all sound died. Cause: the Beacn re-inits/re-
+# enumerates on that jack change, and the PipeWeaver/WirePlumber graph pinned
+# to it doesn't cleanly re-bind — so it LOOKS like the port vanished. Rebooting
+# only helps because it rebuilds the graph. This rebuilds it live instead.
+#
+# Tiers (escalate only if the previous one didn't restore sound):
+#   beacn-fix          gentle : restart WirePlumber, rebuild routing, relink music
+#   beacn-fix --full   +      : also restart the Beacn Utility (PipeWeaver devices)
+#   beacn-fix --reset  nuclear: also software-"replug" the Beacn Mic (sudo usbreset)
+#   beacn-fix --dry-run        : print what each step would do, change nothing
+set -u
+
+MIC_SYS="/sys/bus/usb/devices/1-5"          # Beacn Mic (from diagnosis)
+BEACN_UNIT="app-io.github.beacn_on_linux.beacn-utility@autostart.service"
+MODE="gentle"; DRY=0
+for a in "$@"; do case "$a" in
+  --full) MODE="full" ;; --reset) MODE="reset" ;; --dry-run) DRY=1 ;;
+  -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+  *) echo "beacn-fix: unknown arg '$a' (see --help)"; exit 2 ;;
+esac; done
+
+run(){ if [ "$DRY" = 1 ]; then echo "  [dry-run] $*"; else eval "$*"; fi; }
+say(){ printf '%s\n' "$*"; }
+
+say "beacn-fix (${MODE}${DRY:+, dry-run})"
+
+# --- Tier 3 (optional): software replug of the Beacn Mic ----------------------
+if [ "$MODE" = "reset" ]; then
+  if [ -r "$MIC_SYS/busnum" ] && [ -r "$MIC_SYS/devnum" ]; then
+    B=$(printf '%03d' "$(cat "$MIC_SYS/busnum")"); D=$(printf '%03d' "$(cat "$MIC_SYS/devnum")")
+    say "• USB-resetting Beacn Mic at /dev/bus/usb/$B/$D (needs sudo)…"
+    run "sudo usbreset /dev/bus/usb/$B/$D"
+    run "sleep 2"
+  else
+    say "• (couldn't read $MIC_SYS — skipping USB reset)"
+  fi
+fi
+
+# --- Tier 2 (optional): rebuild PipeWeaver virtual devices --------------------
+if [ "$MODE" = "full" ] || [ "$MODE" = "reset" ]; then
+  say "• Restarting Beacn Utility (rebuilds PipeWeaver Game/System/etc.)…"
+  run "systemctl --user restart '$BEACN_UNIT'"
+  run "sleep 2"
+fi
+
+# --- Tier 1 (always): rebuild the WirePlumber session/graph -------------------
+say "• Restarting WirePlumber (re-probes devices, rebinds routing)…"
+run "systemctl --user restart wireplumber"
+run "sleep 2"
+
+# --- wait for the Game node, then restore the EQ music link -------------------
+if [ "$DRY" = 0 ]; then
+  for i in $(seq 1 15); do pw-cli ls Node 2>/dev/null | grep -q pipeweaver_game && break; sleep 1; done
+fi
+if command -v eq-fix >/dev/null 2>&1; then
+  say "• Re-linking EQ music (eq-fix)…"
+  run "eq-fix >/dev/null 2>&1 || true"
+fi
+
+# --- report -------------------------------------------------------------------
+say ""
+if [ "$DRY" = 1 ]; then say "Dry run only — nothing changed."; exit 0; fi
+say "Current Beacn sinks:"
+wpctl status 2>/dev/null | grep -iE "BEACN|PipeWeaver" | sed 's/^/  /'
+say ""
+say "Test sound now. If it's STILL dead, escalate:"
+case "$MODE" in
+  gentle) say "   → beacn-fix --full     (rebuild the Beacn Utility too)" ;;
+  full)   say "   → beacn-fix --reset    (software-replug the mic; asks for sudo)" ;;
+  reset)  say "   → last resort: physically replug the Beacn Mic's USB cable." ;;
+esac
