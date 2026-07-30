@@ -39,7 +39,7 @@ findmnt "$NAS_MNT" >/dev/null 2>&1 || { say "✗ NAS not mounted at $NAS_MNT —
 # ---------------------------------------------------------------------------
 backup_home() {
   hr "HOME — full mirror of \$HOME  → $DEST/home"
-  local RSYNC=(rsync -a --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
+  local RSYNC=(rsync -a --no-owner --no-group --no-D --modify-window=1 --info=progress2,stats2 --human-readable)
   local EX=(); [ "$MUSIC" = 0 ] && EX+=(--exclude='/Music')
   [ "$DRY" = 1 ] && RSYNC+=(--dry-run)
   mkdir -p "$DEST/home" 2>/dev/null || true
@@ -60,7 +60,7 @@ backup_system() {
   say "  Skipping package fluff in /usr (comes back from package-list). Needs sudo…"
   sudo -v || { say "  ✗ sudo required for the system backup"; return 1; }
   mkdir -p "$DEST/root"
-  local FL=(-aR --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
+  local FL=(-aR --no-owner --no-group --no-D --modify-window=1 --info=progress2,stats2 --human-readable)
   [ "$DRY" = 1 ] && FL+=(--dry-run)
   local p
   for p in /etc /usr/local /opt /root /var/spool/cron /var/cache/pacman/pkg; do
@@ -94,7 +94,7 @@ say(){ printf '%s\n' "$*"; }
 say "Restoring HOME → $HOME"
 read -rp "Overwrites files in your home with the backup. Continue? [y/N] " a
 [[ "$a" =~ ^[Yy]$ ]] || exit 1
-rsync -a --no-owner --no-group --no-D --info=progress2 "$HERE/home/" "$HOME/"
+rsync -a --no-owner --no-group --no-D --modify-window=1 --info=progress2 "$HERE/home/" "$HOME/"
 [ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh" 2>/dev/null; chmod 600 "$HOME/.ssh/"* 2>/dev/null; }
 [ -f "$HERE/keys/gnupg.tar.gz" ] && { tar xzf "$HERE/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 "$HOME/.gnupg" 2>/dev/null; }
 say ""
