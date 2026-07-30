@@ -38,8 +38,10 @@ say "  Destination: $DEST/home  (full mirror of \$HOME)"
 [ "$DRY" = 1 ] && say "  (DRY RUN — nothing will be copied)"
 
 # rsync flags: archive + hardlinks; -a keeps symlinks AS symlinks (so the ~/Music
-# symlink won't drag in the whole Plex share). No --delete (backup stays additive).
-RSYNC=(rsync -aH --info=progress2,stats2 --human-readable)
+# symlink won't drag in the whole Plex share). --no-owner/--no-group because the
+# Unraid NFS share squashes ownership (chgrp fails); --no-D skips runtime sockets.
+# Restore re-derives ownership; keys keep real perms via the tarball. No --delete.
+RSYNC=(rsync -aH --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
 EXCLUDES=()
 [ "$MUSIC" = 0 ] && EXCLUDES+=(--exclude='/Music')
 [ "$DRY" = 1 ] && RSYNC+=(--dry-run)
@@ -75,7 +77,7 @@ say "Restoring full home from: $HERE/home  → $HOME"
 read -rp "This overwrites files in $HOME with the backup. Continue? [y/N] " a
 [[ "$a" =~ ^[Yy]$ ]] || { say "aborted"; exit 1; }
 
-rsync -aH --info=progress2 --human-readable "$HERE/home/" "$HOME/"
+rsync -aH --no-owner --no-group --no-D --info=progress2 --human-readable "$HERE/home/" "$HOME/"
 
 # key permission safety (in case the NAS filesystem squashed them)
 [ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh"   2>/dev/null; chmod 600 "$HOME/.ssh/"* 2>/dev/null; }

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# =============================================================================
+# drive-backup — mirror a whole drive to the NAS, resumable + verifiable.
+# =============================================================================
+# For big, irreplaceable NTFS drives. Faster/safer than GUI copy-paste because
+# it resumes where it left off and can PROVE the copy is byte-perfect.
+#
+#   drive-backup <source-mountpoint> [name]     back it up (safe to Ctrl-C + re-run)
+#   drive-backup --check <source> [name]        VERIFY by checksum (read-only, no copy)
+#   drive-backup --dry-run <source> [name]      preview what would copy
+#
+# Examples (your drives):
+#   drive-backup /mnt/2ndPro                        2ndPro
+#   drive-backup /run/media/taubut/980Pro           980Pro
+#   drive-backup "/run/media/taubut/E2C02718C026F289" "Basic-Data"
+#
+# Destination:  /mnt/unraid-backup/windows-backup/<name>/
+# After a backup finishes, run the same command with --check to confirm a
+# perfect match BEFORE you wipe. Keep the originals until --check is clean.
+# =============================================================================
+set -uo pipefail
+
+NAS_MNT="/mnt/unraid-backup"
+DEST_ROOT="$NAS_MNT/windows-backup"
+MODE="copy"
+case "${1:-}" in
+  --check)   MODE="check";   shift ;;
+  --dry-run) MODE="dry";     shift ;;
+  -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+esac
+SRC="${1:?usage: drive-backup [--check|--dry-run] <source-mountpoint> [name]}"
+NAME="${2:-$(basename "$SRC")}"
+DEST="$DEST_ROOT/$NAME"
+
+# --- safety checks -----------------------------------------------------------
+findmnt "$NAS_MNT" >/dev/null 2>&1 || { echo "✗ NAS not mounted at $NAS_MNT — sudo mount $NAS_MNT"; exit 1; }
+findmnt "$SRC"     >/dev/null 2>&1 || { echo "✗ source is not a mounted drive: $SRC"; exit 1; }
+
+# NTFS has no unix perms/ownership and NFS squashes it, so skip both; --no-D
+# skips any special files; --modify-window=2 tolerates NTFS's 2s time resolution;
+# --partial keeps partial files so a re-run resumes big files instead of restarting.
+FLAGS=( -rlt --no-perms --no-owner --no-group --no-D --modify-window=2 --partial
+        --human-readable --info=progress2,stats2 )
+
+mkdir -p "$DEST"
+echo "source: $SRC"
+echo "dest:   $DEST"
+
+case "$MODE" in
+  check)
+    echo "== VERIFY (checksum, read-only) — any lines below = differences =="
+    rsync "${FLAGS[@]}" --checksum --dry-run --itemize-changes "$SRC/" "$DEST/"
+    echo "== if nothing was itemized above, the backup is a perfect match. =="
+    ;;
+  dry)
+    echo "== DRY RUN — nothing will be copied =="
+    rsync "${FLAGS[@]}" --dry-run "$SRC/" "$DEST/"
+    ;;
+  copy)
+    echo "== BACKUP (resumable — safe to Ctrl-C and re-run) =="
+    rsync "${FLAGS[@]}" "$SRC/" "$DEST/"
+    rc=$?
+    case $rc in
+      0)  echo "✓ done, clean." ;;
+      24) echo "✓ done (a few files changed mid-copy — re-run to catch them)." ;;
+      *)  echo "! rsync exit $rc — re-run to resume/finish." ;;
+    esac
+    echo "VERIFY it before trusting it:  drive-backup --check \"$SRC\" \"$NAME\""
+    ;;
+esac
