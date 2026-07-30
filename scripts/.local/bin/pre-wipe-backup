@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# =============================================================================
+# pre-wipe-backup — stash EVERYTHING to the NAS before a full reinstall.
+# =============================================================================
+# Creates one clean, browsable folder on the Unraid NAS with your dotfiles,
+# repos, keys, KDE/app config, soundfont, wallpapers, and ~/Faugus — plus a
+# self-contained restore-from-nas.sh + README. No GitHub needed to come back.
+#
+#   pre-wipe-backup            back up everything (incl. the 53G Faugus)
+#   pre-wipe-backup --no-faugus  skip Faugus (the big, re-downloadable one)
+#   pre-wipe-backup --dry-run    show the plan + sizes, copy nothing
+# =============================================================================
+set -uo pipefail
+
+NAS_MNT="/mnt/unraid-backup"
+DEST="$NAS_MNT/CachyOS-FreshStart"
+DOTFILES="$HOME/dotfiles"
+DRY=0; FAUGUS=1
+for a in "$@"; do case "$a" in
+  --dry-run) DRY=1 ;; --no-faugus) FAUGUS=0 ;;
+  -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+  *) echo "unknown arg: $a"; exit 2 ;;
+esac; done
+
+say(){ printf '%s\n' "$*"; }
+hr(){ printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
+RS="rsync -a --human-readable"
+
+# --- SAFETY: the NAS must actually be mounted (don't fill the local disk) ----
+if ! findmnt "$NAS_MNT" >/dev/null 2>&1; then
+  say "✗ NAS not mounted at $NAS_MNT. Mount it first (it's in /etc/fstab):"
+  say "    sudo mount $NAS_MNT"
+  exit 1
+fi
+say "✓ NAS mounted: $(findmnt -no SOURCE "$NAS_MNT")"
+say "  Destination: $DEST"
+[ "$DRY" = 1 ] && say "  (DRY RUN — nothing will be copied)"
+
+# --- what we back up: "label|source|dest-subdir|type(rsync|tar)" ------------
+copy_dir(){  # $1 src  $2 dest
+  [ -e "$1" ] || { say "  – skip (absent): ${1#$HOME/}"; return; }
+  if [ "$DRY" = 1 ]; then say "  would rsync ${1#$HOME/}  ($(du -sh "$1" 2>/dev/null|cut -f1))  → ${2#$DEST/}"; return; fi
+  mkdir -p "$2"; $RS "$1/" "$2/" && say "  ✓ ${1#$HOME/}"
+}
+tar_paths(){  # $1 dest-tarball ; rest = paths relative to $HOME (only existing)
+  local out="$1"; shift; local have=()
+  for p in "$@"; do [ -e "$HOME/$p" ] && have+=("$p"); done
+  [ "${#have[@]}" -eq 0 ] && { say "  – skip (none present): $(basename "$out")"; return; }
+  if [ "$DRY" = 1 ]; then say "  would tar ${have[*]}  → ${out#$DEST/}"; return; fi
+  mkdir -p "$(dirname "$out")"; tar czf "$out" -C "$HOME" "${have[@]}" && say "  ✓ $(basename "$out") (${#have[@]} paths)"
+}
+
+hr "1/7 dotfiles (full, incl. git history)"
+copy_dir "$DOTFILES" "$DEST/dotfiles"
+
+hr "2/7 other git repos"
+copy_dir "$HOME/anchovy-new"          "$DEST/repos/Anchovy"
+copy_dir "$HOME/git-work/ShamanPower" "$DEST/repos/ShamanPower"
+copy_dir "$HOME/pokefirered-custom"   "$DEST/repos/pokefirered-custom"
+
+hr "3/7 keys (perms preserved inside tar)"
+tar_paths "$DEST/keys/ssh.tar.gz"   .ssh
+tar_paths "$DEST/keys/gnupg.tar.gz" .gnupg
+
+hr "4/7 KDE + app config + Claude memories"
+tar_paths "$DEST/home-config/kde.tar.gz" \
+  .config/kglobalshortcutsrc .config/kwinrc .config/kwinrulesrc \
+  .config/plasmarc .config/plasmashellrc .config/kdeglobals \
+  .config/plasma-org.kde.plasma.desktop-appletsrc .config/khotkeysrc
+tar_paths "$DEST/home-config/apps.tar.gz" \
+  .config/OpenRGB .config/qutebrowser .local/share/qutebrowser \
+  .config/fluidsynth .config/systemd/user/fluidsynth.service.d
+tar_paths "$DEST/home-config/claude.tar.gz" .claude
+
+hr "5/7 soundfont (EQ music) + wallpapers + EQ guide"
+copy_dir "$HOME/.local/share/soundfonts" "$DEST/soundfonts"
+copy_dir "$HOME/Pictures/Wallpapers"     "$DEST/media/Wallpapers-Pictures"
+copy_dir "$HOME/Videos/Wallpapers"       "$DEST/media/Wallpapers-Videos"
+copy_dir "$HOME/Documents/EQGuide"       "$DEST/media/EQGuide"
+
+hr "6/7 Faugus (EQ Legends + Wine prefixes, ~53G)"
+if [ "$FAUGUS" = 1 ]; then copy_dir "$HOME/Faugus" "$DEST/Faugus"
+else say "  – skipped (--no-faugus)"; fi
+
+hr "7/7 manifest + restore script + readme"
+if [ "$DRY" = 0 ]; then
+  mkdir -p "$DEST"
+  # ---- restore-from-nas.sh (self-contained; runs from inside the backup) ----
+  cat > "$DEST/restore-from-nas.sh" <<'RESTORE'
+#!/usr/bin/env bash
+# Restore everything from this NAS backup onto a fresh machine.
+# Copy this whole folder somewhere local (or run it straight off the NAS), then:
+#   ./restore-from-nas.sh
+set -u
+HERE="$(cd "$(dirname "$0")" && pwd)"
+RS="rsync -a --human-readable"
+say(){ printf '%s\n' "$*"; }
+
+say "Restoring from: $HERE"
+# 1. dotfiles → ~/dotfiles
+[ -d "$HERE/dotfiles" ] && { $RS "$HERE/dotfiles/" "$HOME/dotfiles/"; say "✓ dotfiles"; }
+# 2. repos
+[ -d "$HERE/repos/Anchovy" ]             && $RS "$HERE/repos/Anchovy/"             "$HOME/anchovy-new/"
+[ -d "$HERE/repos/ShamanPower" ]         && { mkdir -p "$HOME/git-work"; $RS "$HERE/repos/ShamanPower/" "$HOME/git-work/ShamanPower/"; }
+[ -d "$HERE/repos/pokefirered-custom" ]  && $RS "$HERE/repos/pokefirered-custom/"  "$HOME/pokefirered-custom/"
+say "✓ repos"
+# 3. keys (perms restored from tar)
+[ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh"   2>/dev/null; }
+[ -f "$HERE/keys/gnupg.tar.gz" ] && { tar xzf "$HERE/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 "$HOME/.gnupg" 2>/dev/null; }
+say "✓ keys"
+# 4. config + memories
+for t in kde apps claude; do [ -f "$HERE/home-config/$t.tar.gz" ] && tar xzf "$HERE/home-config/$t.tar.gz" -C "$HOME"; done
+say "✓ config + memories"
+# 5. soundfont + media
+[ -d "$HERE/soundfonts" ]              && { mkdir -p "$HOME/.local/share/soundfonts"; $RS "$HERE/soundfonts/" "$HOME/.local/share/soundfonts/"; }
+[ -d "$HERE/media/Wallpapers-Pictures" ] && { mkdir -p "$HOME/Pictures/Wallpapers"; $RS "$HERE/media/Wallpapers-Pictures/" "$HOME/Pictures/Wallpapers/"; }
+[ -d "$HERE/media/Wallpapers-Videos" ]   && { mkdir -p "$HOME/Videos/Wallpapers";   $RS "$HERE/media/Wallpapers-Videos/"   "$HOME/Videos/Wallpapers/"; }
+[ -d "$HERE/media/EQGuide" ]           && { mkdir -p "$HOME/Documents/EQGuide";    $RS "$HERE/media/EQGuide/" "$HOME/Documents/EQGuide/"; }
+say "✓ soundfont + media"
+# 6. Faugus (big)
+[ -d "$HERE/Faugus" ] && { $RS "$HERE/Faugus/" "$HOME/Faugus/"; say "✓ Faugus"; }
+echo
+echo "Done. Now set up the rest of the system:"
+echo "    cd ~/dotfiles && ./fresh-start.sh"
+RESTORE
+  chmod +x "$DEST/restore-from-nas.sh"
+
+  # ---- README ----
+  cat > "$DEST/README.txt" <<'README'
+CachyOS Fresh-Start backup
+==========================
+A complete, browsable snapshot to rebuild this machine WITHOUT needing GitHub.
+
+To restore on a fresh CachyOS install:
+  1. Install CachyOS (choose KDE Plasma).
+  2. Copy this whole folder to the new machine (or mount the NAS and run in place).
+  3. ./restore-from-nas.sh        # keys, configs, soundfont, Faugus, repos, dotfiles
+  4. cd ~/dotfiles && ./fresh-start.sh   # packages + stow configs + apps + services
+  5. Re-bind Meta+Space -> anchovy-toggle if the KDE shortcut didn't carry.
+
+Contents:
+  dotfiles/       full ~/dotfiles (with git history) — the installer lives here
+  repos/          Anchovy, ShamanPower, pokefirered-custom
+  keys/           ssh + gnupg (tarred, permissions preserved) — KEEP PRIVATE
+  home-config/    KDE/Plasma settings, app config, ~/.claude memories
+  soundfonts/     fluidsynth soundfont (EQ music)
+  media/          wallpapers + the EQ Legends guide site
+  Faugus/         EverQuest Legends + Wine prefixes (may be absent if --no-faugus)
+README
+
+  # ---- MANIFEST ----
+  {
+    echo "CachyOS Fresh-Start backup"
+    echo "created: $(date '+%Y-%m-%d %H:%M:%S')   host: $(hostname)"
+    echo "faugus included: $([ "$FAUGUS" = 1 ] && echo yes || echo no)"
+    echo
+    echo "sizes:"; du -sh "$DEST"/* 2>/dev/null | sort -k2
+    echo; echo "total: $(du -sh "$DEST" 2>/dev/null | cut -f1)"
+  } > "$DEST/MANIFEST.txt"
+  say "  ✓ wrote restore-from-nas.sh, README.txt, MANIFEST.txt"
+else
+  say "  would write restore-from-nas.sh, README.txt, MANIFEST.txt"
+fi
+
+hr "done"
+[ "$DRY" = 1 ] && { say "Dry run complete — nothing copied."; exit 0; }
+say "Backup folder: $DEST"
+say "Total on NAS:  $(du -sh "$DEST" 2>/dev/null | cut -f1)"
+say "Restore later: run  $DEST/restore-from-nas.sh  on the fresh machine."
