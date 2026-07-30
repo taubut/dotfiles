@@ -115,6 +115,32 @@ s2_configs() {
 }
 
 # ---------------------------------------------------------------------------
+# Plasma-only restore — for redoing JUST the theme from a TTY (Plasma not running)
+# so it doesn't get clobbered. Small + fast (config files only).
+s_plasma() {
+  hr "Plasma theme — restore just the appearance files"
+  have_nas || return
+  if pgrep -x plasmashell >/dev/null 2>&1; then
+    warn "Plasma is RUNNING — this will get overwritten when you log out."
+    warn "For it to stick: log out → Ctrl+Alt+F3 (a TTY) → log in → run this → reboot."
+    read -rp "  Run anyway? [y/N] " a; [[ "${a,,}" == y* ]] || { warn "skipped"; return; }
+  fi
+  local paths=(
+    .config/kdeglobals .config/kwinrc .config/kwinrulesrc .config/plasmarc
+    .config/plasmashellrc .config/plasma-org.kde.plasma.desktop-appletsrc
+    .config/kglobalshortcutsrc .config/kactivitymanagerdrc .config/kscreenlockerrc
+    .config/kdedefaults .config/gtk-3.0 .config/gtk-4.0 .gtkrc-2.0 .config/Kvantum
+    .local/share/plasma .local/share/aurorae .local/share/color-schemes
+    .local/share/icons .local/share/konsole
+  )
+  local p n=0
+  for p in "${paths[@]}"; do
+    [ -e "$NAS/home/$p" ] && rsync -aR --no-owner --no-group --no-D "$NAS/home/./$p" "$HOME/" 2>/dev/null && n=$((n+1))
+  done
+  ok "restored $n theme paths — now REBOOT and your look should be back"
+}
+
+# ---------------------------------------------------------------------------
 s3_verify_configs() {
   hr "3/7 · Verify configs landed"
   local c miss=0
@@ -228,6 +254,7 @@ EOF
       1) s1_packages ;; 2) s2_configs ;; 3) s3_verify_configs ;;
       4) s4_services ;; 5) s5_faugus_keybinds ;;
       6) s6_final_check ;; 7) s7_borg ;;
+      p) s_plasma ;;
       q|"") echo "  bye"; return 0 ;;
       *) warn "unknown choice: $c" ;;
     esac
@@ -241,6 +268,7 @@ case "${1:-}" in
   --configs)  s2_configs ;;
   --verify)   s3_verify_configs ;;
   --services) s4_services ;;
+  --plasma)   s_plasma ;;
   --faugus)   s5_faugus_keybinds ;;
   --check)    s6_final_check ;;
   --borg)     s7_borg ;;
