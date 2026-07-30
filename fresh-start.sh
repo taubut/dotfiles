@@ -54,7 +54,7 @@ stage_restore() {
     echo "  Source: $NAS/home  ($(du -sh "$NAS/home" 2>/dev/null | cut -f1))"
     echo "  Copies your ENTIRE home back to ~ (keeps the current ~/dotfiles you're running from)."
     read -rp "  Proceed? [y/N] " a; [[ "${a,,}" == y* ]] || { warn "skipped"; return; }
-    rsync -aH --no-owner --no-group --no-D --info=progress2 --human-readable \
+    rsync -a --no-owner --no-group --no-D --info=progress2 --human-readable \
           --exclude '/dotfiles/' "$NAS/home/" "$HOME/" && ok "home restored"
     [ -f "$NAS/keys/ssh.tar.gz" ]   && { tar xzf "$NAS/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 ~/.ssh 2>/dev/null; chmod 600 ~/.ssh/* 2>/dev/null; ok "ssh keys (perms fixed)"; }
     [ -f "$NAS/keys/gnupg.tar.gz" ] && { tar xzf "$NAS/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 ~/.gnupg 2>/dev/null; ok "gnupg keys"; }
@@ -114,7 +114,7 @@ stage_restore_pick() {
     done
     printf '\033[H\033[J'
 
-    local RS=(rsync -aHR --no-owner --no-group --no-D --info=progress2 --human-readable)
+    local RS=(rsync -aR --no-owner --no-group --no-D --info=progress2 --human-readable)
     local any=0
     for ((i=0; i<n; i++)); do
         [ "${SEL[$i]}" = 1 ] || continue
@@ -122,7 +122,7 @@ stage_restore_pick() {
         local lbl="${CATS[$i]%%|*}" paths="${CATS[$i]#*|}" rel
         printf '\n\033[1m══ %s ══\033[0m\n' "$lbl"
         if [ "$paths" = FULL ]; then
-            rsync -aH --no-owner --no-group --no-D --info=progress2 --human-readable --exclude '/dotfiles/' "$NAS/home/" "$HOME/" && ok "full home restored"
+            rsync -a --no-owner --no-group --no-D --info=progress2 --human-readable --exclude '/dotfiles/' "$NAS/home/" "$HOME/" && ok "full home restored"
             break
         elif [ "$paths" = KEYS ]; then
             [ -f "$NAS/keys/ssh.tar.gz" ]   && { tar xzf "$NAS/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 ~/.ssh 2>/dev/null; chmod 600 ~/.ssh/* 2>/dev/null; ok "ssh keys"; }
