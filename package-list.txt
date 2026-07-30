@@ -367,7 +367,7 @@ sticky-notes
 subtui-git
 vicinae-bin
 virt-manager-git
-wallust
+wallust-git
 wayland-push-to-talk-fix-git
 xrdp
 youtube-tui
