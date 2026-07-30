@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""
+Fix Similar Artists - Find and normalize artist names that are almost identical
+Usage:
+    fix-similar-artists                    # Show similar artists
+    fix-similar-artists --apply            # Interactively fix them
+    fix-similar-artists --path /some/path  # Scan specific directory
+"""
+
+import os
+import sys
+import argparse
+from pathlib import Path
+from collections import defaultdict
+from difflib import SequenceMatcher
+
+try:
+    from mutagen.easyid3 import EasyID3
+    from mutagen.flac import FLAC
+    from mutagen.mp4 import MP4
+    from mutagen.oggvorbis import OggVorbis
+except ImportError:
+    print("Error: mutagen library not found")
+    print("Install with: pip install mutagen")
+    sys.exit(1)
+
+def get_artist_from_file(filepath):
+    """Get artist tag from music file"""
+    ext = filepath.suffix.lower()
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            return audio.get('artist', [None])[0]
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            return audio.get('artist', [None])[0]
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            artists = audio.get('\xa9ART', [None])
+            return artists[0] if artists else None
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            return audio.get('artist', [None])[0]
+    except Exception:
+        pass
+    return None
+
+def set_artist_in_file(filepath, new_artist):
+    """Set artist tag in music file"""
+    ext = filepath.suffix.lower()
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            audio['\xa9ART'] = [new_artist]
+            audio.save()
+            return True
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            audio['artist'] = new_artist
+            audio.save()
+            return True
+    except Exception as e:
+        print(f"  Error writing {filepath}: {e}")
+    return False
+
+def similarity(a, b):
+    """Calculate similarity ratio between two strings (0-1)"""
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+def normalize_for_compare(name):
+    """Normalize string for comparison - remove special chars, lowercase"""
+    import re
+    # Replace various quotes/apostrophes with standard
+    name = name.replace(''', "'").replace(''', "'")
+    name = name.replace('"', '"').replace('"', '"')
+    # Replace multiple dots/spaces with single
+    name = re.sub(r'\.{2,}', '.', name)
+    name = re.sub(r'\s+', ' ', name)
+    return name.lower().strip()
+
+def find_similar_artists(artists_dict, threshold=0.85):
+    """Find groups of similar artist names"""
+    artist_names = list(artists_dict.keys())
+    similar_groups = []
+    used = set()
+
+    for i, name1 in enumerate(artist_names):
+        if name1 in used:
+            continue
+
+        group = [name1]
+        norm1 = normalize_for_compare(name1)
+
+        for j, name2 in enumerate(artist_names[i+1:], i+1):
+            if name2 in used:
+                continue
+
+            norm2 = normalize_for_compare(name2)
+
+            # Check similarity
+            sim = similarity(norm1, norm2)
+            if sim >= threshold:
+                group.append(name2)
+                used.add(name2)
+                continue
+
+            # Check if one starts with the other (collab pattern)
+            # e.g., "The Wonder Years" vs "The Wonder Years & Little Kruta"
+            if len(norm1) > 3 and len(norm2) > 3:
+                # Check for "Artist & Collab" or "Artist, Collab" patterns
+                for sep in [' & ', ', ', ' and ', ' with ', ' x ']:
+                    if norm2.startswith(norm1 + sep) or norm1.startswith(norm2 + sep):
+                        group.append(name2)
+                        used.add(name2)
+                        break
+                    # Also check without separator if one is prefix
+                    if len(norm1) >= 10 and norm2.startswith(norm1) and len(norm2) > len(norm1) + 3:
+                        # Longer name starts with shorter + has extra content
+                        rest = norm2[len(norm1):]
+                        if rest.startswith((' &', ', ', ' and', ' with', ' feat', ' ft', ' x ')):
+                            group.append(name2)
+                            used.add(name2)
+                            break
+                    if len(norm2) >= 10 and norm1.startswith(norm2) and len(norm1) > len(norm2) + 3:
+                        rest = norm1[len(norm2):]
+                        if rest.startswith((' &', ', ', ' and', ' with', ' feat', ' ft', ' x ')):
+                            group.append(name2)
+                            used.add(name2)
+                            break
+
+        if len(group) > 1:
+            similar_groups.append(group)
+            used.add(name1)
+
+    return similar_groups
+
+def scan_directory(path):
+    """Scan directory and collect all artists with their files"""
+    path = Path(path).expanduser()
+
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return {}
+
+    extensions = {'.mp3', '.flac', '.m4a', '.mp4', '.aac', '.ogg'}
+    artists = defaultdict(list)
+
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+
+            if filepath.suffix.lower() not in extensions:
+                continue
+
+            artist = get_artist_from_file(filepath)
+            if artist:
+                artists[artist].append(filepath)
+
+    print(f"Found {len(artists)} unique artists")
+    return artists
+
+def show_hex_diff(s1, s2):
+    """Show character differences between two strings"""
+    diffs = []
+    for i, (c1, c2) in enumerate(zip(s1, s2)):
+        if c1 != c2:
+            diffs.append(f"pos {i}: '{c1}' ({hex(ord(c1))}) vs '{c2}' ({hex(ord(c2))})")
+    if len(s1) != len(s2):
+        diffs.append(f"length: {len(s1)} vs {len(s2)}")
+    return diffs
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Find and fix similar artist names'
+    )
+    parser.add_argument(
+        '--apply', '-a',
+        action='store_true',
+        help='Interactively apply fixes'
+    )
+    parser.add_argument(
+        '--path', '-p',
+        default='~/Music/SS',
+        help='Path to music directory (default: ~/Music/SS)'
+    )
+    parser.add_argument(
+        '--threshold', '-t',
+        type=float,
+        default=0.85,
+        help='Similarity threshold 0-1 (default: 0.85)'
+    )
+
+    args = parser.parse_args()
+
+    # Scan for artists
+    artists = scan_directory(args.path)
+    if not artists:
+        return
+
+    # Find similar groups
+    similar = find_similar_artists(artists, args.threshold)
+
+    if not similar:
+        print("\nNo similar artists found!")
+        return
+
+    print(f"\nFound {len(similar)} groups of similar artists:\n")
+
+    for group in similar:
+        print("=" * 50)
+        for i, name in enumerate(group):
+            file_count = len(artists[name])
+            print(f"  [{i+1}] \"{name}\" ({file_count} files)")
+
+        # Show what's different
+        if len(group) == 2:
+            diffs = show_hex_diff(group[0], group[1])
+            if diffs:
+                print(f"  Differences: {', '.join(diffs[:3])}")
+
+        if args.apply:
+            print()
+            choice = input("  Choose canonical version (number), or 's' to skip: ").strip().lower()
+
+            if choice == 's' or choice == '':
+                print("  Skipping...")
+                continue
+
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(group):
+                    canonical = group[idx]
+                    print(f"  Using: \"{canonical}\"")
+
+                    # Update all files from other variants
+                    for variant in group:
+                        if variant == canonical:
+                            continue
+                        for filepath in artists[variant]:
+                            if set_artist_in_file(filepath, canonical):
+                                print(f"    Updated: {filepath.name}")
+                else:
+                    print("  Invalid choice, skipping...")
+            except ValueError:
+                print("  Invalid input, skipping...")
+
+        print()
+
+    if not args.apply:
+        print("-" * 60)
+        print("DRY RUN - No changes made")
+        print("Run with --apply to interactively fix artists")
+        print("\nAfter fixing, run 'mpc update' to refresh MPD database")
+
+if __name__ == '__main__':
+    main()

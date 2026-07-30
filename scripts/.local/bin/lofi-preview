@@ -1,0 +1,9 @@
+#!/bin/bash
+id="$1"
+
+# Clear any existing kitty graphics, then clear screen
+printf '\033_Ga=d\033\\'
+printf '\033[2J\033[H'
+
+# Draw new image
+curl -s "https://img.youtube.com/vi/${id}/hqdefault.jpg" | chafa --format kitty -s 40 --animate=off 2>/dev/null

@@ -1,0 +1,5 @@
+#!/bin/bash
+# Kill existing lofi mpv and play new stream
+pkill -f "mpv.*youtube.com/watch" 2>/dev/null
+id=$(cat)
+mpv --no-terminal "https://www.youtube.com/watch?v=${id}" &

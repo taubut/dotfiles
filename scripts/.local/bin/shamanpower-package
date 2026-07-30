@@ -1,0 +1,44 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$1" ]; then
+    echo "Usage: shamanpower-package <version>"
+    echo "Example: shamanpower-package 1.5.7"
+    exit 1
+fi
+
+VERSION="$1"
+SRC="/home/taubut/git-work/ShamanPower"
+DEST="/tmp/shamanpower-build"
+
+# Clean up any existing temp folder
+rm -rf "$DEST"
+
+# Create folder structure
+mkdir -p "$DEST/ShamanPower"
+
+# Copy everything except ShamanPower_* folders and .git to ShamanPower/
+for item in "$SRC"/*; do
+    name=$(basename "$item")
+    # Skip .git and ShamanPower_* folders
+    if [[ "$name" == ".git" ]]; then
+        continue
+    fi
+    if [[ -d "$item" && "$name" == ShamanPower_* ]]; then
+        # Copy ShamanPower_* folders to root level
+        cp -r "$item" "$DEST/"
+    else
+        # Copy everything else to ShamanPower/
+        cp -r "$item" "$DEST/ShamanPower/"
+    fi
+done
+
+# Create the zip from inside the build folder so contents are at root
+cd "$DEST"
+zip -r "/home/taubut/ShamanPower-${VERSION}.zip" .
+
+# Clean up
+rm -rf "$DEST"
+
+echo "Created: /home/taubut/ShamanPower-${VERSION}.zip"

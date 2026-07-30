@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""
+Find Duplicate Music - Find duplicate songs by title+artist or filename
+Usage:
+    find-duplicate-music                    # Show duplicates
+    find-duplicate-music --delete           # Interactively delete duplicates
+    find-duplicate-music --path /some/path  # Scan specific directory
+"""
+
+import os
+import sys
+import argparse
+from pathlib import Path
+from collections import defaultdict
+
+try:
+    from mutagen.easyid3 import EasyID3
+    from mutagen.flac import FLAC
+    from mutagen.mp4 import MP4
+    from mutagen.oggvorbis import OggVorbis
+except ImportError:
+    print("Error: mutagen library not found")
+    print("Install with: pip install mutagen")
+    sys.exit(1)
+
+def get_tags_from_file(filepath):
+    """Get artist and title from music file"""
+    ext = filepath.suffix.lower()
+
+    try:
+        if ext == '.mp3':
+            audio = EasyID3(filepath)
+            return {
+                'artist': audio.get('artist', ['Unknown'])[0],
+                'title': audio.get('title', ['Unknown'])[0],
+                'album': audio.get('album', ['Unknown'])[0]
+            }
+        elif ext == '.flac':
+            audio = FLAC(filepath)
+            return {
+                'artist': audio.get('artist', ['Unknown'])[0],
+                'title': audio.get('title', ['Unknown'])[0],
+                'album': audio.get('album', ['Unknown'])[0]
+            }
+        elif ext in ['.m4a', '.mp4', '.aac']:
+            audio = MP4(filepath)
+            return {
+                'artist': audio.get('\xa9ART', ['Unknown'])[0],
+                'title': audio.get('\xa9nam', ['Unknown'])[0],
+                'album': audio.get('\xa9alb', ['Unknown'])[0]
+            }
+        elif ext == '.ogg':
+            audio = OggVorbis(filepath)
+            return {
+                'artist': audio.get('artist', ['Unknown'])[0],
+                'title': audio.get('title', ['Unknown'])[0],
+                'album': audio.get('album', ['Unknown'])[0]
+            }
+    except Exception as e:
+        pass
+
+    return None
+
+def normalize(text):
+    """Normalize text for comparison"""
+    if not text:
+        return ""
+    return text.lower().strip()
+
+def scan_for_duplicates(path):
+    """Scan directory for duplicate music files"""
+    path = Path(path).expanduser()
+
+    if not path.exists():
+        print(f"Error: Path does not exist: {path}")
+        return {}
+
+    extensions = {'.mp3', '.flac', '.m4a', '.mp4', '.aac', '.ogg'}
+
+    # Group by normalized artist+title
+    by_tags = defaultdict(list)
+
+    print(f"Scanning: {path}")
+    print("-" * 60)
+
+    file_count = 0
+    for root, dirs, files in os.walk(path):
+        for filename in files:
+            filepath = Path(root) / filename
+
+            if filepath.suffix.lower() not in extensions:
+                continue
+
+            file_count += 1
+            tags = get_tags_from_file(filepath)
+
+            if tags:
+                key = (normalize(tags['artist']), normalize(tags['title']))
+                by_tags[key].append({
+                    'path': filepath,
+                    'artist': tags['artist'],
+                    'title': tags['title'],
+                    'album': tags['album'],
+                    'size': filepath.stat().st_size
+                })
+
+    print(f"Scanned {file_count} files")
+
+    # Filter to only duplicates
+    duplicates = {k: v for k, v in by_tags.items() if len(v) > 1}
+
+    return duplicates
+
+def format_size(size):
+    """Format file size"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+def show_duplicates(duplicates, interactive=False):
+    """Display found duplicates"""
+    if not duplicates:
+        print("\nNo duplicates found!")
+        return
+
+    total_dupes = sum(len(v) - 1 for v in duplicates.values())
+    print(f"\nFound {len(duplicates)} songs with duplicates ({total_dupes} extra files):\n")
+
+    for (artist, title), files in sorted(duplicates.items()):
+        print(f"  {files[0]['artist']} - {files[0]['title']}")
+        print(f"  ({len(files)} copies)")
+
+        for i, f in enumerate(files):
+            size = format_size(f['size'])
+            print(f"    [{i+1}] {f['path'].name} ({size}) - Album: {f['album']}")
+
+        if interactive:
+            print()
+            choice = input("  Delete which? (comma-separated numbers, 'k' to keep all, 's' to skip): ").strip().lower()
+
+            if choice == 'k' or choice == 's' or choice == '':
+                print("  Skipping...")
+            else:
+                try:
+                    to_delete = [int(x.strip()) - 1 for x in choice.split(',')]
+                    for idx in to_delete:
+                        if 0 <= idx < len(files):
+                            filepath = files[idx]['path']
+                            filepath.unlink()
+                            print(f"  Deleted: {filepath.name}")
+                except (ValueError, IndexError):
+                    print("  Invalid input, skipping...")
+
+        print()
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Find duplicate music files by artist+title'
+    )
+    parser.add_argument(
+        '--delete', '-d',
+        action='store_true',
+        help='Interactively choose duplicates to delete'
+    )
+    parser.add_argument(
+        '--path', '-p',
+        default='~/Music/SS',
+        help='Path to music directory (default: ~/Music/SS)'
+    )
+
+    args = parser.parse_args()
+
+    duplicates = scan_for_duplicates(args.path)
+    show_duplicates(duplicates, interactive=args.delete)
+
+if __name__ == '__main__':
+    main()

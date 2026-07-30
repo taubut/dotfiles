@@ -1,0 +1,7 @@
+#!/bin/bash
+# Only allow query input when in filter mode
+if [ "$(cat /tmp/lofi-mode 2>/dev/null)" = "filter" ]; then
+    echo "$1"
+else
+    echo ""
+fi

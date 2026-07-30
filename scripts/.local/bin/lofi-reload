@@ -1,0 +1,11 @@
+#!/bin/bash
+# Smart reload - filters only in filter mode
+query="$1"
+cache="/tmp/lofi-streams"
+mode=$(cat /tmp/lofi-mode 2>/dev/null)
+
+if [ "$mode" = "filter" ] && [ -n "$query" ]; then
+    grep -i "$query" "$cache"
+else
+    cat "$cache"
+fi
