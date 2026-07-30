@@ -1,165 +1,119 @@
 #!/usr/bin/env bash
 # =============================================================================
-# pre-wipe-backup — stash EVERYTHING to the NAS before a full reinstall.
+# pre-wipe-backup — FULL mirror of your entire home to the NAS before a wipe.
 # =============================================================================
-# Creates one clean, browsable folder on the Unraid NAS with your dotfiles,
-# repos, keys, KDE/app config, soundfont, wallpapers, and ~/Faugus — plus a
-# self-contained restore-from-nas.sh + README. No GitHub needed to come back.
+# Copies ALL of $HOME (Faugus/WoW, projects, Games, Downloads, browser profiles,
+# dotfiles, keys, .config, .claude — everything) to a clean, browsable folder on
+# the Unraid NAS, plus a self-contained restore-from-nas.sh + README. Nothing is
+# cherry-picked. You have 12 TB; we use it.
 #
-#   pre-wipe-backup            back up everything (incl. the 53G Faugus)
-#   pre-wipe-backup --no-faugus  skip Faugus (the big, re-downloadable one)
-#   pre-wipe-backup --dry-run    show the plan + sizes, copy nothing
+#   pre-wipe-backup             mirror everything (skips only the ~/Music Plex share)
+#   pre-wipe-backup --with-music  ALSO copy ~/Music (your Plex library — huge/redundant)
+#   pre-wipe-backup --dry-run    show what would copy, change nothing
+#
+# The ONLY thing skipped by default is ~/Music — it's a network mount to your
+# Plex server (already safe there, not local data). Pass --with-music to include it.
 # =============================================================================
 set -uo pipefail
 
 NAS_MNT="/mnt/unraid-backup"
 DEST="$NAS_MNT/CachyOS-FreshStart"
-DOTFILES="$HOME/dotfiles"
-DRY=0; FAUGUS=1
+DRY=0; MUSIC=0
 for a in "$@"; do case "$a" in
-  --dry-run) DRY=1 ;; --no-faugus) FAUGUS=0 ;;
-  -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+  --dry-run) DRY=1 ;; --with-music) MUSIC=1 ;;
+  -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
   *) echo "unknown arg: $a"; exit 2 ;;
 esac; done
 
 say(){ printf '%s\n' "$*"; }
 hr(){ printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
-RS="rsync -a --human-readable"
 
-# --- SAFETY: the NAS must actually be mounted (don't fill the local disk) ----
+# --- SAFETY: NAS must be mounted (don't silently fill the local disk) --------
 if ! findmnt "$NAS_MNT" >/dev/null 2>&1; then
-  say "✗ NAS not mounted at $NAS_MNT. Mount it first (it's in /etc/fstab):"
-  say "    sudo mount $NAS_MNT"
+  say "✗ NAS not mounted at $NAS_MNT — mount it first:  sudo mount $NAS_MNT"
   exit 1
 fi
 say "✓ NAS mounted: $(findmnt -no SOURCE "$NAS_MNT")"
-say "  Destination: $DEST"
+say "  Destination: $DEST/home  (full mirror of \$HOME)"
 [ "$DRY" = 1 ] && say "  (DRY RUN — nothing will be copied)"
 
-# --- what we back up: "label|source|dest-subdir|type(rsync|tar)" ------------
-copy_dir(){  # $1 src  $2 dest
-  [ -e "$1" ] || { say "  – skip (absent): ${1#$HOME/}"; return; }
-  if [ "$DRY" = 1 ]; then say "  would rsync ${1#$HOME/}  ($(du -sh "$1" 2>/dev/null|cut -f1))  → ${2#$DEST/}"; return; fi
-  mkdir -p "$2"; $RS "$1/" "$2/" && say "  ✓ ${1#$HOME/}"
-}
-tar_paths(){  # $1 dest-tarball ; rest = paths relative to $HOME (only existing)
-  local out="$1"; shift; local have=()
-  for p in "$@"; do [ -e "$HOME/$p" ] && have+=("$p"); done
-  [ "${#have[@]}" -eq 0 ] && { say "  – skip (none present): $(basename "$out")"; return; }
-  if [ "$DRY" = 1 ]; then say "  would tar ${have[*]}  → ${out#$DEST/}"; return; fi
-  mkdir -p "$(dirname "$out")"; tar czf "$out" -C "$HOME" "${have[@]}" && say "  ✓ $(basename "$out") (${#have[@]} paths)"
-}
+# rsync flags: archive + hardlinks; -a keeps symlinks AS symlinks (so the ~/Music
+# symlink won't drag in the whole Plex share). No --delete (backup stays additive).
+RSYNC=(rsync -aH --info=progress2,stats2 --human-readable)
+EXCLUDES=()
+[ "$MUSIC" = 0 ] && EXCLUDES+=(--exclude='/Music')
+[ "$DRY" = 1 ] && RSYNC+=(--dry-run)
 
-hr "1/7 dotfiles (full, incl. git history)"
-copy_dir "$DOTFILES" "$DEST/dotfiles"
+hr "Mirroring entire home → NAS"
+say "  This is large (Faugus alone is ~53G) — let it run."
+mkdir -p "$DEST/home" 2>/dev/null || true
+# rsync may exit 23/24 (a file vanished / perms) while copying a live home — that's OK.
+"${RSYNC[@]}" "${EXCLUDES[@]}" "$HOME/" "$DEST/home/"
+rc=$?
+case $rc in
+  0)  say "  ✓ mirror complete (clean)";;
+  23) say "  ✓ mirror complete (some files unreadable/skipped — usually caches/sockets)";;
+  24) say "  ✓ mirror complete (some files changed during copy — normal for a live home)";;
+  *)  say "  ! rsync exit $rc — review output above";;
+esac
 
-hr "2/7 other git repos"
-copy_dir "$HOME/anchovy-new"          "$DEST/repos/Anchovy"
-copy_dir "$HOME/git-work/ShamanPower" "$DEST/repos/ShamanPower"
-copy_dir "$HOME/pokefirered-custom"   "$DEST/repos/pokefirered-custom"
-
-hr "3/7 keys (perms preserved inside tar)"
-tar_paths "$DEST/keys/ssh.tar.gz"   .ssh
-tar_paths "$DEST/keys/gnupg.tar.gz" .gnupg
-
-hr "4/7 KDE + app config + Claude memories"
-tar_paths "$DEST/home-config/kde.tar.gz" \
-  .config/kglobalshortcutsrc .config/kwinrc .config/kwinrulesrc \
-  .config/plasmarc .config/plasmashellrc .config/kdeglobals \
-  .config/plasma-org.kde.plasma.desktop-appletsrc .config/khotkeysrc
-tar_paths "$DEST/home-config/apps.tar.gz" \
-  .config/OpenRGB .config/qutebrowser .local/share/qutebrowser \
-  .config/fluidsynth .config/systemd/user/fluidsynth.service.d
-tar_paths "$DEST/home-config/claude.tar.gz" .claude
-
-hr "5/7 soundfont (EQ music) + wallpapers + EQ guide"
-copy_dir "$HOME/.local/share/soundfonts" "$DEST/soundfonts"
-copy_dir "$HOME/Pictures/Wallpapers"     "$DEST/media/Wallpapers-Pictures"
-copy_dir "$HOME/Videos/Wallpapers"       "$DEST/media/Wallpapers-Videos"
-copy_dir "$HOME/Documents/EQGuide"       "$DEST/media/EQGuide"
-
-hr "6/7 Faugus (EQ Legends + Wine prefixes, ~53G)"
-if [ "$FAUGUS" = 1 ]; then copy_dir "$HOME/Faugus" "$DEST/Faugus"
-else say "  – skipped (--no-faugus)"; fi
-
-hr "7/7 manifest + restore script + readme"
 if [ "$DRY" = 0 ]; then
-  mkdir -p "$DEST"
-  # ---- restore-from-nas.sh (self-contained; runs from inside the backup) ----
+  hr "Key permission safety-net (tarred, perms guaranteed)"
+  mkdir -p "$DEST/keys"
+  [ -d "$HOME/.ssh" ]   && tar czf "$DEST/keys/ssh.tar.gz"   -C "$HOME" .ssh   && say "  ✓ keys/ssh.tar.gz"
+  [ -d "$HOME/.gnupg" ] && tar czf "$DEST/keys/gnupg.tar.gz" -C "$HOME" .gnupg && say "  ✓ keys/gnupg.tar.gz"
+
+  hr "restore script + readme + manifest"
   cat > "$DEST/restore-from-nas.sh" <<'RESTORE'
 #!/usr/bin/env bash
-# Restore everything from this NAS backup onto a fresh machine.
-# Copy this whole folder somewhere local (or run it straight off the NAS), then:
-#   ./restore-from-nas.sh
+# Restore the full home mirror onto a fresh machine.
+# Run it off the NAS (or copy this folder local first), then reboot.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-RS="rsync -a --human-readable"
 say(){ printf '%s\n' "$*"; }
+say "Restoring full home from: $HERE/home  → $HOME"
+read -rp "This overwrites files in $HOME with the backup. Continue? [y/N] " a
+[[ "$a" =~ ^[Yy]$ ]] || { say "aborted"; exit 1; }
 
-say "Restoring from: $HERE"
-# 1. dotfiles → ~/dotfiles
-[ -d "$HERE/dotfiles" ] && { $RS "$HERE/dotfiles/" "$HOME/dotfiles/"; say "✓ dotfiles"; }
-# 2. repos
-[ -d "$HERE/repos/Anchovy" ]             && $RS "$HERE/repos/Anchovy/"             "$HOME/anchovy-new/"
-[ -d "$HERE/repos/ShamanPower" ]         && { mkdir -p "$HOME/git-work"; $RS "$HERE/repos/ShamanPower/" "$HOME/git-work/ShamanPower/"; }
-[ -d "$HERE/repos/pokefirered-custom" ]  && $RS "$HERE/repos/pokefirered-custom/"  "$HOME/pokefirered-custom/"
-say "✓ repos"
-# 3. keys (perms restored from tar)
-[ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh"   2>/dev/null; }
+rsync -aH --info=progress2 --human-readable "$HERE/home/" "$HOME/"
+
+# key permission safety (in case the NAS filesystem squashed them)
+[ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh"   2>/dev/null; chmod 600 "$HOME/.ssh/"* 2>/dev/null; }
 [ -f "$HERE/keys/gnupg.tar.gz" ] && { tar xzf "$HERE/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 "$HOME/.gnupg" 2>/dev/null; }
-say "✓ keys"
-# 4. config + memories
-for t in kde apps claude; do [ -f "$HERE/home-config/$t.tar.gz" ] && tar xzf "$HERE/home-config/$t.tar.gz" -C "$HOME"; done
-say "✓ config + memories"
-# 5. soundfont + media
-[ -d "$HERE/soundfonts" ]              && { mkdir -p "$HOME/.local/share/soundfonts"; $RS "$HERE/soundfonts/" "$HOME/.local/share/soundfonts/"; }
-[ -d "$HERE/media/Wallpapers-Pictures" ] && { mkdir -p "$HOME/Pictures/Wallpapers"; $RS "$HERE/media/Wallpapers-Pictures/" "$HOME/Pictures/Wallpapers/"; }
-[ -d "$HERE/media/Wallpapers-Videos" ]   && { mkdir -p "$HOME/Videos/Wallpapers";   $RS "$HERE/media/Wallpapers-Videos/"   "$HOME/Videos/Wallpapers/"; }
-[ -d "$HERE/media/EQGuide" ]           && { mkdir -p "$HOME/Documents/EQGuide";    $RS "$HERE/media/EQGuide/" "$HOME/Documents/EQGuide/"; }
-say "✓ soundfont + media"
-# 6. Faugus (big)
-[ -d "$HERE/Faugus" ] && { $RS "$HERE/Faugus/" "$HOME/Faugus/"; say "✓ Faugus"; }
-echo
-echo "Done. Now set up the rest of the system:"
-echo "    cd ~/dotfiles && ./fresh-start.sh"
+
+say ""
+say "Done — your home is restored. To reinstall system PACKAGES:"
+say "    cd ~/dotfiles && ./fresh-start.sh --packages"
+say "(configs/scripts/etc. are already here from the mirror.)"
 RESTORE
   chmod +x "$DEST/restore-from-nas.sh"
 
-  # ---- README ----
   cat > "$DEST/README.txt" <<'README'
-CachyOS Fresh-Start backup
-==========================
-A complete, browsable snapshot to rebuild this machine WITHOUT needing GitHub.
+CachyOS FULL backup — a complete mirror of ~/ (home directory)
+==============================================================
+Everything you had is under  home/  in its original layout: Faugus (WoW/EQ),
+projects, Games, Downloads, dotfiles, keys, .config, .claude, browser profiles…
+The only default omission is ~/Music (your Plex network share, safe on the server).
 
-To restore on a fresh CachyOS install:
-  1. Install CachyOS (choose KDE Plasma).
-  2. Copy this whole folder to the new machine (or mount the NAS and run in place).
-  3. ./restore-from-nas.sh        # keys, configs, soundfont, Faugus, repos, dotfiles
-  4. cd ~/dotfiles && ./fresh-start.sh   # packages + stow configs + apps + services
-  5. Re-bind Meta+Space -> anchovy-toggle if the KDE shortcut didn't carry.
+Restore on a fresh CachyOS install:
+  1. Install CachyOS (KDE Plasma). Mount this NAS (or copy this folder over).
+  2. ./restore-from-nas.sh            # mirrors home/ back into ~, restores key perms
+  3. cd ~/dotfiles && ./fresh-start.sh --packages   # reinstall the system packages
+  4. Reboot. Re-mount Plex for ~/Music (gio mount smb://taubut@plex.local/data).
 
-Contents:
-  dotfiles/       full ~/dotfiles (with git history) — the installer lives here
-  repos/          Anchovy, ShamanPower, pokefirered-custom
-  keys/           ssh + gnupg (tarred, permissions preserved) — KEEP PRIVATE
-  home-config/    KDE/Plasma settings, app config, ~/.claude memories
-  soundfonts/     fluidsynth soundfont (EQ music)
-  media/          wallpapers + the EQ Legends guide site
-  Faugus/         EverQuest Legends + Wine prefixes (may be absent if --no-faugus)
+No GitHub required — your dotfiles + installer are in home/dotfiles/.
 README
 
-  # ---- MANIFEST ----
   {
-    echo "CachyOS Fresh-Start backup"
+    echo "CachyOS FULL home backup"
     echo "created: $(date '+%Y-%m-%d %H:%M:%S')   host: $(hostname)"
-    echo "faugus included: $([ "$FAUGUS" = 1 ] && echo yes || echo no)"
+    echo "music included: $([ "$MUSIC" = 1 ] && echo yes || echo 'no (Plex share)')"
     echo
-    echo "sizes:"; du -sh "$DEST"/* 2>/dev/null | sort -k2
-    echo; echo "total: $(du -sh "$DEST" 2>/dev/null | cut -f1)"
+    echo "top-level sizes under home/:"
+    du -sh "$DEST"/home/* 2>/dev/null | sort -rh | head -40
+    echo; echo "grand total: $(du -sh "$DEST" 2>/dev/null | cut -f1)"
   } > "$DEST/MANIFEST.txt"
   say "  ✓ wrote restore-from-nas.sh, README.txt, MANIFEST.txt"
-else
-  say "  would write restore-from-nas.sh, README.txt, MANIFEST.txt"
 fi
 
 hr "done"
