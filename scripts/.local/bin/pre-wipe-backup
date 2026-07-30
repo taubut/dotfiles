@@ -56,18 +56,18 @@ backup_home() {
 backup_system() {
   hr "SYSTEM — config + custom bits (what you need to rebuild)  → $DEST/root"
   say "  Grabbing: /etc (systemd units, network, fstab, udev, pacman.conf…), /usr/local,"
-  say "  /opt, /root, crontabs. Skipping package fluff (comes back from package-list)."
-  say "  Needs sudo (these are root-owned)…"
+  say "  /opt, /root, crontabs, + pacman cache (offline/AUR reinstall insurance ~13G)."
+  say "  Skipping package fluff in /usr (comes back from package-list). Needs sudo…"
   sudo -v || { say "  ✗ sudo required for the system backup"; return 1; }
   mkdir -p "$DEST/root"
   local FL=(-aR --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
   [ "$DRY" = 1 ] && FL+=(--dry-run)
   local p
-  for p in /etc /usr/local /opt /root /var/spool/cron; do
+  for p in /etc /usr/local /opt /root /var/spool/cron /var/cache/pacman/pkg; do
     [ -e "$p" ] || continue
     sudo rsync "${FL[@]}" "$p" "$DEST/root/" 2>/dev/null && say "  ✓ $p" || say "  ~ $p (some attrs skipped — fine)"
   done
-  say "  ✓ system config saved"
+  say "  ✓ system config + pacman cache saved"
 }
 
 # ---------------------------------------------------------------------------
