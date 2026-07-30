@@ -25,7 +25,16 @@ hr(){ printf '\n\033[1m═══ %s ═══\033[0m\n' "$1"; }
 ok(){ printf '  \033[32m✓\033[0m %s\n' "$1"; }
 warn(){ printf '  \033[33m!\033[0m %s\n' "$1"; }
 pause(){ read -rp $'\n  \033[2m[Enter] next step · Ctrl-C to stop\033[0m ' _; }
-have_nas(){ findmnt /mnt/unraid-backup >/dev/null 2>&1 || { warn "NAS not mounted — sudo mount /mnt/unraid-backup"; return 1; }; }
+have_nas(){
+  findmnt /mnt/unraid-backup >/dev/null 2>&1 && return 0
+  echo "  Mounting the NAS…"
+  command -v mount.nfs >/dev/null 2>&1 || { echo "  (installing nfs-utils first)"; sudo pacman -S --needed --noconfirm nfs-utils >/dev/null 2>&1; }
+  sudo mkdir -p /mnt/unraid-backup
+  sudo mount -t nfs 192.168.1.185:/mnt/user/CachyOSBackup /mnt/unraid-backup 2>/dev/null
+  findmnt /mnt/unraid-backup >/dev/null 2>&1 && { ok "NAS mounted"; return 0; }
+  warn "couldn't reach the NAS (192.168.1.185) — is your network up?"
+  return 1
+}
 
 # ---------------------------------------------------------------------------
 s0_chat() {
