@@ -65,6 +65,19 @@ if [ "$DRY" = 0 ]; then
   [ -d "$HOME/.ssh" ]   && tar czf "$DEST/keys/ssh.tar.gz"   -C "$HOME" .ssh   && say "  ✓ keys/ssh.tar.gz"
   [ -d "$HOME/.gnupg" ] && tar czf "$DEST/keys/gnupg.tar.gz" -C "$HOME" .gnupg && say "  ✓ keys/gnupg.tar.gz"
 
+  hr "System state (groups, services, packages — so HARDWARE comes back too)"
+  mkdir -p "$DEST/system-state"
+  # group memberships — e.g. plugdev (Razer Naga), input (input-remapper)
+  id -nG > "$DEST/system-state/groups.txt" 2>/dev/null \
+    && say "  ✓ groups.txt [$(id -nG | tr ' ' '\n' | grep -iE 'plugdev|input|razer' | tr '\n' ' ')…]"
+  # every systemd service you had enabled (input-remapper, openrazer-daemon, …)
+  systemctl list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' \
+    > "$DEST/system-state/services-system.txt" && say "  ✓ services-system.txt"
+  systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' \
+    > "$DEST/system-state/services-user.txt" && say "  ✓ services-user.txt"
+  pacman -Qqe > "$DEST/system-state/packages-explicit.txt" 2>/dev/null && say "  ✓ packages-explicit.txt"
+  cp /etc/fstab "$DEST/system-state/fstab.txt" 2>/dev/null && say "  ✓ fstab.txt"
+
   hr "restore script + readme + manifest"
   cat > "$DEST/restore-from-nas.sh" <<'RESTORE'
 #!/usr/bin/env bash
@@ -84,9 +97,10 @@ rsync -aH --no-owner --no-group --no-D --info=progress2 --human-readable "$HERE/
 [ -f "$HERE/keys/gnupg.tar.gz" ] && { tar xzf "$HERE/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 "$HOME/.gnupg" 2>/dev/null; }
 
 say ""
-say "Done — your home is restored. To reinstall system PACKAGES:"
-say "    cd ~/dotfiles && ./fresh-start.sh --packages"
-say "(configs/scripts/etc. are already here from the mirror.)"
+say "Home restored. Now finish the system (programs + hardware):"
+say "    cd ~/dotfiles && ./fresh-start.sh --packages   # reinstall your programs"
+say "    cd ~/dotfiles && ./fresh-start.sh --system     # groups (Razer plugdev / input-remapper) + services"
+say "Then LOG OUT/IN — group changes need it (Razer Naga, input-remapper)."
 RESTORE
   chmod +x "$DEST/restore-from-nas.sh"
 
@@ -100,9 +114,13 @@ The only default omission is ~/Music (your Plex network share, safe on the serve
 Restore on a fresh CachyOS install:
   1. Install CachyOS (KDE Plasma). Mount this NAS (or copy this folder over).
   2. ./restore-from-nas.sh            # mirrors home/ back into ~, restores key perms
-  3. cd ~/dotfiles && ./fresh-start.sh --packages   # reinstall the system packages
-  4. Reboot. Re-mount Plex for ~/Music (gio mount smb://taubut@plex.local/data).
+  3. cd ~/dotfiles && ./fresh-start.sh --packages   # reinstall your programs
+  4. cd ~/dotfiles && ./fresh-start.sh --system     # groups (Razer 'plugdev', input-remapper) + services
+  5. LOG OUT/IN (group changes need it). Re-mount Plex for ~/Music.
 
+Shortcut: from a git clone of dotfiles you can just run  ./fresh-start.sh  and
+pick 'E' (EVERYTHING BACK) — it does packages + this restore + system in one go.
+system-state/ holds your captured groups, enabled services, package list, fstab.
 No GitHub required — your dotfiles + installer are in home/dotfiles/.
 README
 

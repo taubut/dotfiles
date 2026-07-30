@@ -1,51 +1,43 @@
 # Pre-wipe checklist
 
-Before reformatting, **back up everything below** — `fresh-start.sh` restores configs
-and packages, but NOT the data/binaries/keys here. Copy them to the 2nd drive or an
-external disk first. (You're reclaiming the Windows partition, so also grab anything
-still on it.)
+The backup scripts now capture **almost everything automatically** — a full `$HOME`
+mirror plus a system-state snapshot (groups, enabled services, package list, fstab).
+This is the short list of things to *do* and *double-check* so nothing is lost.
 
-## 1. Verify these git repos are pushed (or they're gone)
-- [ ] **dotfiles** — this repo (push after these edits)
-- [ ] **Anchovy** — `~/anchovy-new` → github.com/taubut/Anchovy *(already pushed ✓)*
-- [ ] **ShamanPower** — `~/git-work/ShamanPower` (check `git status` + `git push`)
-- [ ] **pokefirered-custom** — `~/pokefirered-custom` (has a remote? if not, push somewhere)
-- [ ] any other `~/git-work/*` or project with uncommitted work
+## 1. Run the backups (in your own terminal — `backup-menu`)
+- [ ] **Linux home** → `pre-wipe-backup` (mirrors ALL of `/home`, incl. `.config`,
+      `.claude`, soundfont, Faugus/WoW, keys, input-remapper + Razer profiles)
+- [ ] **2ndPro** drive → `drive-backup /mnt/2ndPro 2ndPro`
+- [ ] **980Pro** drive → `drive-backup /run/media/taubut/980Pro 980Pro`
+- [ ] **Basic Data** → `drive-backup "/run/media/taubut/E2C02718C026F289" Basic-Data`
+- [ ] **Verify the drives**: `drive-backup --check <src> <name>` → must show a clean
+      match. **Keep the drive originals until it does.**
 
-## 2. Big local data (not in any repo)
-- [ ] **Fluidsynth soundfont** — `~/.local/share/soundfonts/SC-55 Roland SOUNDCanvas Up.sf2`
-      (178 MB). EQ music is silent without it; `~/.config/fluidsynth` points at this path.
-- [ ] **`~/Faugus/`** — the entire EverQuest Legends + Battle.net setup: Wine prefixes,
-      game installs, `eqclient.ini` (HidePlayers etc.), DLL overrides. Large — or plan to
-      reinstall the games fresh and just note the settings.
-- [ ] **`~/Documents/EQGuide/`** — the EQ Legends guide site we built.
-- [ ] **Wallpapers** — `~/Pictures/Wallpapers`, `~/Videos/Wallpapers` (the pickers expect them)
-- [ ] **`~/.claude/`** — Claude Code data incl. the memory notes (audio fixes, EQ/Faugus, etc.)
-- [ ] **OpenRGB profiles** — `~/.config/OpenRGB/` (your LED profiles)
+## 2. What's captured for you (no action needed)
+- Everything under `/home/taubut` except `~/Music` (that's your Plex share, safe on the server)
+- **system-state/** in the backup: your **group memberships** (incl. `plugdev` for the
+  Razer Naga, `input` for input-remapper), every **enabled service**, `pacman -Qqe`, `/etc/fstab`
+- Your **dotfiles + installer** live inside the backup (`home/dotfiles/`) — no GitHub needed
 
-## 3. Secrets & accounts (never in git)
-- [ ] **SSH keys** — `~/.ssh/`
-- [ ] **GPG keys** — `~/.gnupg/`
-- [ ] **Browser** — qutebrowser sessions/cookies/quickmarks in `~/.local/share/qutebrowser`
-      and `~/.config/qutebrowser`; logins in any other browser
-- [ ] App logins/tokens (Discord, etc.) as needed
+## 3. Hardware — how it comes back
+- **Razer Naga**: `fresh-start.sh --system` re-adds you to `plugdev`; the openrazer
+  driver+daemon reinstall from `package-list.txt`; your lighting/DPI profiles restore
+  with your home. → then **log out/in**.
+- **input-remapper**: package reinstalls, `input` group re-added, its service re-enabled,
+  and your mappings restore from `~/.config`. → **log out/in**.
 
-## 4. KDE Plasma settings NOT tracked by the `kde/` stow package
-The repo only tracks a few KDE files. Back up (or re-set after):
-- [ ] **`~/.config/kglobalshortcutsrc`** — global shortcuts, incl. **Meta+Space → anchovy-toggle**
-- [ ] `~/.config/kwinrc`, `~/.config/plasmarc`, `~/.config/plasmashellrc`
-- [ ] Panel/widget layout, look-and-feel, SDDM theme
-- [ ] Custom shortcuts (`~/.config/khotkeysrc` / `kglobalshortcutsrc`)
-- [ ] Tip: KDE has *System Settings → (search) "export"* for some of this.
+## 4. Secrets — sanity check (they're in the backup, but confirm)
+- [ ] `~/.ssh` and `~/.gnupg` copied (also tarred with correct perms in `keys/`)
+- [ ] Browser logins you care about (qutebrowser / others) — profiles are in the home mirror
 
-## 5. System-level (root) config
-- [ ] `/etc/fstab` — mounts (will change anyway after re-partitioning)
-- [ ] Custom `udev` rules — e.g. `/etc/udev/rules.d/99-beacn-mix.rules`
-- [ ] Any `/etc/pacman.conf` tweaks (watch the NoExtract gotcha that eats WM .desktop files)
+## 5. Restore order on the fresh machine
+```
+# install CachyOS (KDE Plasma), mount the NAS, clone or copy dotfiles, then:
+cd ~/dotfiles && ./fresh-start.sh      # pick  E  (EVERYTHING BACK)
+#   → installs packages, restores your whole home from the NAS, restores groups+services
+```
+Then **LOG OUT / REBOOT** (required for group changes — Razer, input-remapper), and
+re-mount Plex for `~/Music`. If EQ music is silent, run `eq-fix`.
 
-## After reinstall
-1. Install CachyOS (pick **KDE Plasma**), then: `git clone <dotfiles> ~/dotfiles`
-2. `cd ~/dotfiles && ./fresh-start.sh` → **Stage 1 (packages)** → **reboot**
-3. `./fresh-start.sh` → **A (all)** for configs + apps + services
-4. Restore the soundfont + KDE shortcuts + `~/Faugus` from your backup
-5. `eq-fix` / `beacn-fix` are on PATH if audio needs a nudge
+> The one thing outside all of this: files still living **only on the Windows
+> partition** you're reclaiming — grab those with `drive-backup` before you wipe.
