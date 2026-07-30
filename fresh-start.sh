@@ -84,6 +84,11 @@ s1_packages() {
 s2_configs() {
   hr "2/7 · Configs — restore exactly as they were"
   have_nas || return
+  warn "KDE gotcha: Plasma REWRITES its configs on logout, so a restore done inside a"
+  warn "running Plasma session gets clobbered when you log out — your theme won't stick."
+  warn "For it to stick: run this step from a TTY (Ctrl+Alt+F3, log in, run fresh-start"
+  warn "there), OR reboot IMMEDIATELY after without touching Plasma. Then log in fresh."
+  read -rp "  Understood — continue the config restore? [y/N] " _a; [[ "${_a,,}" == y* ]] || { warn "skipped — re-run from a TTY"; return; }
   # home: all ~/.config, dotfiles data, etc. (keep the ~/dotfiles you're running from)
   if [ -d "$NAS/home" ]; then
     echo "  Restoring home configs/data from NAS…"
@@ -196,7 +201,10 @@ rebuild() {
   s6_final_check;     pause
   s7_borg
   hr "Rebuild complete"
-  echo "  Reboot when ready. EQ music silent? run 'eq-fix'. Audio odd? 'beacn-fix'."
+  echo "  REBOOT now (don't just log out of a Plasma session you customized — it can"
+  echo "  overwrite the restored Plasma/theme configs). After reboot your desktop, window"
+  echo "  decorations, colors, panel + icons should all be back."
+  echo "  EQ music silent? run 'eq-fix'. Audio odd after an aux swap? 'beacn-fix'."
 }
 
 menu() {
