@@ -29,20 +29,22 @@ have_nas(){ findmnt /mnt/unraid-backup >/dev/null 2>&1 || { warn "NAS not mounte
 
 # ---------------------------------------------------------------------------
 s0_chat() {
-  hr "0 · Chat history — get back to THIS conversation FIRST"
+  hr "0 · Claude Code + THIS conversation — restored FIRST, usable right away"
   have_nas || return
-  if [ -d "$NAS/home/.claude" ]; then
-    rsync -a --no-owner --no-group --no-D --info=progress2 "$NAS/home/.claude" "$HOME/" \
-      && ok "~/.claude restored (Claude Code history — incl. this rebuild convo + memory)"
+  # Claude Code is a self-contained native install in ~/.local (history in ~/.claude), so we
+  # bring the BINARY + history back straight from the home backup — no reinstall, works now.
+  rsync -aR --no-owner --no-group --no-D --info=progress2 \
+    "$NAS/home/./.local/share/claude" \
+    "$NAS/home/./.local/bin/claude" \
+    "$NAS/home/./.claude" \
+    "$HOME/" 2>/dev/null && ok "Claude Code binary + history + memory restored"
+  [ -f "$NAS/home/.claude.json" ] && cp "$NAS/home/.claude.json" "$HOME/" 2>/dev/null && ok "~/.claude.json restored"
+  chmod +x ~/.local/bin/claude ~/.local/share/claude/versions/* 2>/dev/null || true
+  if [ -e "$HOME/.local/bin/claude" ]; then
+    ok "Ready NOW — launch it:   ~/.local/bin/claude    then type  /resume"
+    ok "→ pick THIS conversation and follow the rest of the rebuild with me right beside you."
   else
-    warn "~/.claude not found in the backup"
-  fi
-  [ -f "$NAS/home/.claude.json" ] && { cp "$NAS/home/.claude.json" "$HOME/" 2>/dev/null && ok "~/.claude.json restored"; }
-  if command -v claude >/dev/null 2>&1; then
-    ok "Claude Code is installed — run 'claude' here and /resume to open this exact conversation"
-  else
-    warn "Claude Code not installed yet. Install it (e.g. npm i -g @anthropic-ai/claude-code),"
-    warn "then run 'claude' in this folder — your history, including this convo, will be right there."
+    warn "claude not restored — reinstall: curl -fsSL https://claude.ai/install.sh | bash , then /resume"
   fi
 }
 
