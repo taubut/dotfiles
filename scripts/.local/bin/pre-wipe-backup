@@ -3,19 +3,21 @@
 # pre-wipe-backup — back up your Linux install to the NAS before a wipe.
 # =============================================================================
 # MENU:
-#   1) Home            full ~/ mirror                 → CachyOS-FreshStart/home
-#   2) EVERYTHING ELSE all of / EXCEPT home (sudo)    → CachyOS-FreshStart/root
-#   3) Whole drive     1 + 2
+#   1) Home     full ~/ mirror                        → CachyOS-FreshStart/home
+#   2) System   the config + custom bits you need to  → CachyOS-FreshStart/root
+#              rebuild (NOT package fluff)
+#   3) Both     1 + 2
 #
-# home/ + root/ together = a copy of LITERALLY EVERY FILE on your Linux drive,
-# except the handful that can't/shouldn't be copied:
-#   • /dev /proc /sys /run  — kernel-virtual, not real files
-#   • /mnt /media           — the NAS itself + your other mounted drives
-#   • /tmp /var/tmp         — scratch, wiped on boot anyway
-#   • lost+found, swapfile
+# "System" grabs what's yours and hard to recreate, and is NOT in /home:
+#   /etc            all system config — systemd units, network, fstab, udev, pacman.conf
+#   /usr/local      your custom scripts/binaries (numlock, ferrosonic, uad, …)
+#   /opt            third-party apps
+#   /root           root's home
+#   /var/spool/cron crontabs
+# It SKIPS the fluff — /usr package files, /var caches/logs, /boot — because those
+# come straight back from package-list.txt when you reinstall. Needs sudo.
 #
-# Flags: --home  --system  --everything  |  --dry-run  --with-music
-# No args = menu.  The system backup needs sudo (most of / is root-owned).
+# Flags: --home  --system  --both  |  --dry-run  --with-music.  No args = menu.
 # =============================================================================
 set -uo pipefail
 
@@ -23,9 +25,9 @@ NAS_MNT="/mnt/unraid-backup"
 DEST="$NAS_MNT/CachyOS-FreshStart"
 DRY=0; MUSIC=0; CHOICE=""
 for a in "$@"; do case "$a" in
-  --home) CHOICE="home" ;; --system) CHOICE="system" ;; --everything) CHOICE="all" ;;
+  --home) CHOICE="home" ;; --system) CHOICE="system" ;; --both|--everything) CHOICE="both" ;;
   --dry-run) DRY=1 ;; --with-music) MUSIC=1 ;;
-  -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
   *) echo "unknown arg: $a"; exit 2 ;;
 esac; done
 
@@ -42,93 +44,93 @@ backup_home() {
   [ "$DRY" = 1 ] && RSYNC+=(--dry-run)
   mkdir -p "$DEST/home" 2>/dev/null || true
   "${RSYNC[@]}" "${EX[@]}" "$HOME/" "$DEST/home/"
-  case $? in 0) say "  ✓ home complete";; 23|24) say "  ✓ home complete (minor attr/vanished skips)";; *) say "  ! rsync issue — re-run to finish";; esac
+  case $? in 0) say "  ✓ home complete";; 23|24) say "  ✓ home complete (minor attr/vanished skips)";; *) say "  ! re-run to finish";; esac
   [ "$DRY" = 1 ] && return
   hr "Keys (tarred, perms guaranteed)"
   mkdir -p "$DEST/keys"
   [ -d "$HOME/.ssh" ]   && tar czf "$DEST/keys/ssh.tar.gz"   -C "$HOME" .ssh   && say "  ✓ keys/ssh.tar.gz"
   [ -d "$HOME/.gnupg" ] && tar czf "$DEST/keys/gnupg.tar.gz" -C "$HOME" .gnupg && say "  ✓ keys/gnupg.tar.gz"
-  hr "System-state lists (quick reference)"
-  mkdir -p "$DEST/system-state"
-  id -nG > "$DEST/system-state/groups.txt" 2>/dev/null && say "  ✓ groups.txt"
-  systemctl list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' > "$DEST/system-state/services-system.txt" && say "  ✓ services-system.txt"
-  systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' > "$DEST/system-state/services-user.txt" && say "  ✓ services-user.txt"
-  pacman -Qqe > "$DEST/system-state/packages-explicit.txt" 2>/dev/null && say "  ✓ packages-explicit.txt"
 }
 
 # ---------------------------------------------------------------------------
 backup_system() {
-  hr "EVERYTHING ELSE — all of / except home  → $DEST/root"
-  say "  Excluding only: /dev /proc /sys /run (kernel-virtual) · /mnt /media (NAS + other drives)"
-  say "  · /tmp /var/tmp (scratch) · lost+found · swap · /home (backed up separately)"
-  say "  (needs sudo — most of / is root-owned)"
+  hr "SYSTEM — config + custom bits (what you need to rebuild)  → $DEST/root"
+  say "  Grabbing: /etc (systemd units, network, fstab, udev, pacman.conf…), /usr/local,"
+  say "  /opt, /root, crontabs. Skipping package fluff (comes back from package-list)."
+  say "  Needs sudo (these are root-owned)…"
   sudo -v || { say "  ✗ sudo required for the system backup"; return 1; }
   mkdir -p "$DEST/root"
-  local FL=(-a --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
+  local FL=(-aR --no-owner --no-group --no-D --info=progress2,stats2 --human-readable)
   [ "$DRY" = 1 ] && FL+=(--dry-run)
-  local EX=(
-    --exclude='/dev/*'  --exclude='/proc/*' --exclude='/sys/*' --exclude='/run/*'
-    --exclude='/tmp/*'  --exclude='/var/tmp/*'
-    --exclude='/mnt/*'  --exclude='/media/*'
-    --exclude='/lost+found' --exclude='/swapfile' --exclude='/swap.img'
-    --exclude='/home/*'
-  )
-  sudo rsync "${FL[@]}" "${EX[@]}" / "$DEST/root/"
-  case $? in 0) say "  ✓ system complete";; 23|24) say "  ✓ system complete (minor attr/in-use-file skips)";; *) say "  ! rsync issue — re-run to finish";; esac
+  local p
+  for p in /etc /usr/local /opt /root /var/spool/cron; do
+    [ -e "$p" ] || continue
+    sudo rsync "${FL[@]}" "$p" "$DEST/root/" 2>/dev/null && say "  ✓ $p" || say "  ~ $p (some attrs skipped — fine)"
+  done
+  say "  ✓ system config saved"
+}
+
+# ---------------------------------------------------------------------------
+save_lists() {
+  [ "$DRY" = 1 ] && return
+  hr "Enabled-services + package lists (quick reference)"
+  mkdir -p "$DEST/system-state"
+  id -nG > "$DEST/system-state/groups.txt" 2>/dev/null && say "  ✓ groups.txt"
+  systemctl list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' > "$DEST/system-state/services-system.txt" && say "  ✓ services-system.txt (enabled system services)"
+  systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null | awk '{print $1}' > "$DEST/system-state/services-user.txt" && say "  ✓ services-user.txt (enabled user services)"
+  pacman -Qqe > "$DEST/system-state/packages-explicit.txt" 2>/dev/null && say "  ✓ packages-explicit.txt"
 }
 
 # ---------------------------------------------------------------------------
 write_meta() {
   [ "$DRY" = 1 ] && return
-  hr "restore helper + readme + manifest"
-  cp /etc/fstab "$DEST/system-state/fstab.txt" 2>/dev/null || true
+  hr "restore helper + readme"
   cat > "$DEST/restore-from-nas.sh" <<'RESTORE'
 #!/usr/bin/env bash
-# Restore your files on a fresh machine. Run from inside this backup folder.
+# Restore on a fresh machine. Run from inside this backup folder.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 say(){ printf '%s\n' "$*"; }
-say "Restoring HOME from $HERE/home → $HOME"
-read -rp "This overwrites files in \$HOME with the backup. Continue? [y/N] " a
+say "Restoring HOME → $HOME"
+read -rp "Overwrites files in your home with the backup. Continue? [y/N] " a
 [[ "$a" =~ ^[Yy]$ ]] || exit 1
 rsync -a --no-owner --no-group --no-D --info=progress2 "$HERE/home/" "$HOME/"
 [ -f "$HERE/keys/ssh.tar.gz" ]   && { tar xzf "$HERE/keys/ssh.tar.gz"   -C "$HOME"; chmod 700 "$HOME/.ssh" 2>/dev/null; chmod 600 "$HOME/.ssh/"* 2>/dev/null; }
 [ -f "$HERE/keys/gnupg.tar.gz" ] && { tar xzf "$HERE/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 "$HOME/.gnupg" 2>/dev/null; }
 say ""
-say "HOME restored. Reinstall programs:  cd ~/dotfiles && ./fresh-start.sh --packages"
-say "Groups/services:                    ./fresh-start.sh --system"
+say "HOME restored. Now:"
+say "  cd ~/dotfiles && ./fresh-start.sh --packages   # reinstall your programs"
+say "  cd ~/dotfiles && ./fresh-start.sh --system     # groups + re-enable services"
 say ""
-say "root/ is a COMPLETE REFERENCE COPY of your old system (/etc, /usr, /var, /opt,"
-say "/root, /boot). Do NOT dump it wholesale over a fresh install — cherry-pick what"
-say "you need from it (e.g. cp root/etc/systemd/system/numlock.service back), then"
-say "  sudo cp -a root/usr/local/. /usr/local/    # your custom scripts/binaries"
+say "System config is in  root/  — pull back what you need, e.g.:"
+say "  sudo cp -a root/usr/local/.  /usr/local/                       # custom scripts"
+say "  sudo cp root/etc/systemd/system/numlock.service /etc/systemd/system/"
+say "  sudo cp -r root/etc/NetworkManager/system-connections /etc/NetworkManager/  # WiFi"
+say "(Don't blind-copy ALL of root/etc over a fresh install — cherry-pick.)"
 RESTORE
   chmod +x "$DEST/restore-from-nas.sh"
   cat > "$DEST/README.txt" <<'README'
-CachyOS full backup
-===================
-  home/          complete mirror of ~/ (everything under /home/taubut, minus ~/Music)
-  root/          complete copy of the rest of / — /etc, /usr, /var, /opt, /root, /boot,
-                 /usr/local, systemd units, everything. (Excludes /mnt, /media, /dev,
-                 /proc, /sys, /run, /tmp — the NAS, other drives, and kernel-virtual dirs.)
+CachyOS backup
+==============
+  home/          full mirror of ~/ (everything under /home/taubut, minus ~/Music)
+  root/          system config + custom bits: /etc (all config incl. systemd units,
+                 network, fstab, udev), /usr/local (your scripts/binaries), /opt, /root,
+                 crontabs. NOT package files (those reinstall from package-list.txt).
   keys/          ssh + gnupg (tarred, perms preserved) — KEEP PRIVATE
-  system-state/  groups, enabled services, package list, fstab (quick reference)
+  system-state/  enabled services, groups, package list (quick reference)
 
-home/ + root/ = every real file on your Linux drive. Restore: ./restore-from-nas.sh
-(brings home back); treat root/ as a reference to pull specific system files from.
+Rebuild: install CachyOS → ./restore-from-nas.sh (home) →
+  cd ~/dotfiles && ./fresh-start.sh --packages && ./fresh-start.sh --system
+Then cherry-pick any system config you need from root/.
 README
-  {
-    echo "backup created: $(date '+%Y-%m-%d %H:%M:%S')  host: $(hostname)"
-    echo; echo "top-level sizes:"; du -sh "$DEST"/* 2>/dev/null
-  } > "$DEST/MANIFEST.txt" 2>/dev/null || true
-  say "  ✓ restore-from-nas.sh, README.txt, MANIFEST.txt"
+  say "  ✓ restore-from-nas.sh, README.txt"
 }
 
 # ---------------------------------------------------------------------------
 run() { case "$1" in
-    home)   backup_home; write_meta ;;
-    system) backup_system; write_meta ;;
-    all)    backup_home; backup_system; write_meta ;;
+    home)   backup_home; save_lists; write_meta ;;
+    system) backup_system; save_lists; write_meta ;;
+    both)   backup_home; backup_system; save_lists; write_meta ;;
   esac; }
 
 if [ -n "$CHOICE" ]; then run "$CHOICE"
@@ -136,16 +138,16 @@ else
   cat <<EOF
 
   What do you want to back up?  (NAS: $(df -h --output=avail "$NAS_MNT" | tail -1 | tr -d ' ') free)
-  ────────────────────────────────────────────────────────────
-   1) Home            full ~/ mirror              → home/
-   2) EVERYTHING ELSE all of / except home (sudo) → root/     ← the rest of your drive
-   3) Whole drive     1 + 2
+  ───────────────────────────────────────────────────────────────────
+   1) Home     full ~/ mirror                                → home/
+   2) System   config + custom scripts + services (no fluff) → root/
+   3) Both     home + system
    q) quit
-  ────────────────────────────────────────────────────────────
+  ───────────────────────────────────────────────────────────────────
 EOF
   read -rp "  choose: " c
   case "${c,,}" in
-    1) run home ;; 2) run system ;; 3) run all ;;
+    1) run home ;; 2) run system ;; 3) run both ;;
     *) say "  nothing done."; exit 0 ;;
   esac
 fi
