@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================================
-# drive-backup-selective — pick which top-level folders of a drive to back up.
+# drive-backup-selective — navigate a drive and back up exactly what you pick.
 # =============================================================================
-# For the big NTFS drives: instead of copying the WHOLE drive, it measures each
-# top-level folder's size, shows a checklist (↑/↓ · SPACE · ENTER), and rsyncs
-# only what you tick — so you skip games/Windows/Python junk you'll never restore.
-# Resumable (Ctrl-C + re-run). Verify with --check afterward.
+# Browse the drive like a file tree: open folders (→), go back (←), and tick
+# (SPACE) what to back up at ANY depth. Tick a folder to take all of it, or open
+# it and un-tick the junk inside (e.g. keep Users, skip Users/…/AppData). Shows
+# each folder's size (GiB) + a running "selected" total. rsyncs only your picks.
+# Resumable. Verify with --check.
 #
-#   drive-backup-selective <mount> [name]           pick + back up
-#   drive-backup-selective --check <mount> [name]   verify (checksum) what's in the backup
-#
-# Examples:
-#   drive-backup-selective /run/media/taubut/980Pro 980Pro
-#   drive-backup-selective "/run/media/taubut/E2C02718C026F289" Basic-Data
+#   drive-backup-selective                 pick a drive, then browse + tick
+#   drive-backup-selective <mount> [name]  browse a specific drive
+#   drive-backup-selective --check <mount> [name]   verify what's in the backup
 # Destination: /mnt/unraid-backup/windows-backup/<name>/
 # =============================================================================
 set -uo pipefail
@@ -24,119 +22,132 @@ case "${1:-}" in
   --check) MODE="check"; shift ;;
   -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
 esac
-
 findmnt "$NAS_MNT" >/dev/null 2>&1 || { echo "✗ NAS not mounted at $NAS_MNT — sudo mount $NAS_MNT"; exit 1; }
 
-# known NTFS drives (label|mountpoint|backup-name)
-DRIVES=(
-  "2ndPro|/mnt/2ndPro|2ndPro"
-  "980Pro|/run/media/taubut/980Pro|980Pro"
-  "Basic Data|/run/media/taubut/E2C02718C026F289|Basic-Data"
-)
-
+DRIVES=( "2ndPro|/mnt/2ndPro|2ndPro" "980Pro|/run/media/taubut/980Pro|980Pro" "Basic Data|/run/media/taubut/E2C02718C026F289|Basic-Data" )
 if [ -n "${1:-}" ]; then
   SRC="$1"; NAME="${2:-$(basename "$SRC")}"
 else
-  # no drive given → ask which one (only lists ones that are mounted)
-  avail=()
-  for d in "${DRIVES[@]}"; do IFS='|' read -r lbl mnt nm <<<"$d"; findmnt "$mnt" >/dev/null 2>&1 && avail+=("$d"); done
-  [ "${#avail[@]}" -eq 0 ] && { echo "No NTFS drives mounted (2ndPro / 980Pro / Basic Data)."; exit 1; }
-  echo "  Which drive do you want to selectively back up?"
-  i=1; for d in "${avail[@]}"; do IFS='|' read -r lbl mnt nm <<<"$d"; printf "   %d) %-12s %s\n" "$i" "$lbl" "$mnt"; i=$((i+1)); done
-  echo "   q) quit"
-  read -rp "  choose: " c
+  avail=(); for d in "${DRIVES[@]}"; do IFS='|' read -r lbl mnt nm <<<"$d"; findmnt "$mnt" >/dev/null 2>&1 && avail+=("$d"); done
+  [ "${#avail[@]}" -eq 0 ] && { echo "No NTFS drives mounted."; exit 1; }
+  echo "  Which drive?"; i=1
+  for d in "${avail[@]}"; do IFS='|' read -r lbl mnt nm <<<"$d"; printf "   %d) %-12s %s\n" "$i" "$lbl" "$mnt"; i=$((i+1)); done
+  echo "   q) quit"; read -rp "  choose: " c
   { [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -ge 1 ] && [ "$c" -le "${#avail[@]}" ]; } || { echo "  bye"; exit 0; }
   IFS='|' read -r _ SRC NAME <<<"${avail[$((c-1))]}"
 fi
 DEST="$DEST_ROOT/$NAME"
+findmnt "$SRC" >/dev/null 2>&1 || { echo "✗ not a mounted drive: $SRC"; exit 1; }
 
-findmnt "$SRC" >/dev/null 2>&1 || { echo "✗ source is not a mounted drive: $SRC"; exit 1; }
-
-# rsync flags — NTFS-friendly + skip trash/recycle/system junk
 FLAGS=( -rlt --no-perms --no-owner --no-group --no-D --modify-window=2 --partial
         --human-readable --info=progress2,stats2
         --exclude='.Trash-*' --exclude='$RECYCLE.BIN' --exclude='System Volume Information' )
 fmtG(){ awk -v b="${1:-0}" 'BEGIN{printf "%8.1f GiB", b/1073741824}'; }
 skip(){ case "$1" in '.Trash-'*|'$RECYCLE.BIN'|'System Volume Information'|hiberfil.sys|pagefile.sys|swapfile.sys) return 0;; *) return 1;; esac; }
 
-# ---------- VERIFY MODE ----------
+# ---------- VERIFY ----------
 if [ "$MODE" = "check" ]; then
-  [ -d "$DEST" ] || { echo "no backup folder at $DEST"; exit 1; }
-  echo "== Verifying each backed-up folder against the drive (checksum) =="
-  for d in "$DEST"/*/; do
-    [ -d "$d" ] || continue
-    n="$(basename "$d")"
-    echo "── $n"
-    rsync "${FLAGS[@]}" --checksum --dry-run --itemize-changes "$SRC/$n/" "$d" 2>/dev/null
+  [ -d "$DEST" ] || { echo "no backup at $DEST"; exit 1; }
+  echo "== Verifying backed-up folders vs the drive (checksum) =="
+  ( cd "$DEST" && find . -mindepth 1 -maxdepth 1 -printf '%P\n' ) | while read -r n; do
+    echo "── $n"; rsync "${FLAGS[@]}" --checksum --dry-run --itemize-changes "$SRC/$n/" "$DEST/$n/" 2>/dev/null
   done
-  echo "== any lines above a folder = differences; none = that folder is a perfect match =="
-  exit 0
+  echo "== nothing listed under a name = perfect match =="; exit 0
 fi
 
-# ---------- MEASURE TOP-LEVEL SIZES ----------
-echo "Measuring top-level folder sizes on $SRC …"
-echo "(this can take a minute on a big drive — it's reading the whole tree once)"
-NAMES=(); BYTES=(); SEL=()
-while IFS=$'\t' read -r b p; do
-  n="${p##*/}"; skip "$n" && continue
-  NAMES+=("$n"); BYTES+=("$b"); SEL+=(0)
-done < <(du -sb "$SRC"/* 2>/dev/null | sort -rn)
-N=${#NAMES[@]}
-[ "$N" -eq 0 ] && { echo "nothing to back up on $SRC"; exit 0; }
+# ---------- TREE NAVIGATOR ----------
+declare -A SELECTED EXCLUDED
+CURDIR=""; cursor=0; SELSIZE=0
 
-total=0; for ((i=0;i<N;i++)); do total=$((total+${BYTES[$i]})); done
+relpath(){ printf '%s' "${CURDIR:+$CURDIR/}$1"; }
+# included: nearest ancestor-or-self decides (deeper wins). exclude beats include.
+included(){ local p="$1"
+  while :; do
+    [ -n "${EXCLUDED[$p]:-}" ] && return 1
+    [ -n "${SELECTED[$p]:-}" ] && return 0
+    [[ "$p" == */* ]] || return 1
+    p="${p%/*}"
+  done
+}
+has_selected_descendant(){ local p="$1" s; for s in "${!SELECTED[@]}"; do [[ "$s" == "$p/"* ]] && return 0; done; return 1; }
 
-# ---------- CHECKLIST (arrow keys) ----------
-cursor=0
-draw(){
-  printf '\033[H\033[J'
-  local seltot=0 i
-  for ((i=0;i<N;i++)); do [ "${SEL[$i]}" = 1 ] && seltot=$((seltot+${BYTES[$i]})); done
-  echo "  Pick folders to back up   ↑/↓ move · SPACE tick · a all/none · ENTER start · q quit"
-  echo "  drive: $SRC   →   windows-backup/$NAME"
-  printf "  selected: \033[1m%s\033[0m   of   %s on the drive\n" "$(fmtG $seltot)" "$(fmtG $total)"
+measure(){ NAMES=(); BYTES=(); ISDIR=(); local base="$SRC${CURDIR:+/$CURDIR}" b p n
+  while IFS=$'\t' read -r b p; do n="${p##*/}"; skip "$n" && continue
+    NAMES+=("$n"); BYTES+=("$b"); [ -d "$base/$n" ] && ISDIR+=(1) || ISDIR+=(0)
+  done < <(du -sb "$base"/* 2>/dev/null | sort -rn)
+  N=${#NAMES[@]}; ((cursor>=N)) && cursor=$((N>0?N-1:0))
+}
+
+draw(){ printf '\033[H\033[J'
+  echo "  Browse & pick   ↑/↓ move · → open · ← back · SPACE tick · a all · g GO · q quit"
+  printf "  %s   path: /%s\n" "$NAME" "$CURDIR"
+  printf "  selected so far: \033[1m%s\033[0m\n" "$(fmtG "$SELSIZE")"
   echo "  ──────────────────────────────────────────────────────────────"
+  [ "$N" -eq 0 ] && echo "    (empty)"
+  local i box mark rp st
   for ((i=0;i<N;i++)); do
-    local box="[ ]"; [ "${SEL[$i]}" = 1 ] && box="[✓]"
-    local line; line="$(printf "%s  %s   %s" "$box" "$(fmtG ${BYTES[$i]})" "${NAMES[$i]}")"
+    rp="$(relpath "${NAMES[$i]}")"
+    if included "$rp"; then box="[✓]"
+    elif has_selected_descendant "$rp"; then box="[~]"
+    else box="[ ]"; fi
+    [ "${ISDIR[$i]}" = 1 ] && mark="▸" || mark=" "
+    local line; line="$(printf "%s %s %s   %s" "$box" "$mark" "$(fmtG ${BYTES[$i]})" "${NAMES[$i]}")"
     if [ "$i" = "$cursor" ]; then printf "  \033[7m❯ %s\033[0m\n" "$line"; else printf "    %s\n" "$line"; fi
   done
   echo "  ──────────────────────────────────────────────────────────────"
-  echo "  Tip: quit (q), go look at these folders yourself, then re-run to pick."
+  echo "  [✓]=all of it · [~]=some inside · tick a folder then open it to skip bits"
 }
+
+toggle(){ local rp="$1" sz="$2"
+  if included "$rp"; then
+    if [ -n "${SELECTED[$rp]:-}" ]; then unset "SELECTED[$rp]"; else EXCLUDED[$rp]=1; fi
+    SELSIZE=$((SELSIZE - sz))
+  else
+    if [ -n "${EXCLUDED[$rp]:-}" ]; then unset "EXCLUDED[$rp]"; else SELECTED[$rp]=1; fi
+    SELSIZE=$((SELSIZE + sz))
+  fi
+  ((SELSIZE<0)) && SELSIZE=0
+}
+
+echo "Measuring top-level sizes on $SRC … (a minute on a big drive)"; measure
 while true; do
   draw
   IFS= read -rsn1 key
   [[ "$key" == $'\x1b' ]] && { IFS= read -rsn2 -t 0.05 r || true; key+="${r:-}"; }
   case "$key" in
-    $'\x1b[A'|k|K) if ((cursor>0)); then ((cursor--)); else cursor=$((N-1)); fi ;;
-    $'\x1b[B'|j|J) if ((cursor<N-1)); then ((cursor++)); else cursor=0; fi ;;
-    ' ')  SEL[$cursor]=$((1-${SEL[$cursor]})) ;;
-    a|A)  as=1; for ((i=0;i<N;i++)); do [ "${SEL[$i]}" = 1 ] || as=0; done
-          for ((i=0;i<N;i++)); do [ "$as" = 1 ] && SEL[$i]=0 || SEL[$i]=1; done ;;
-    q|Q)  printf '\033[H\033[J'; echo "  cancelled — nothing copied."; exit 0 ;;
-    ''|$'\n'|$'\r') break ;;
+    $'\x1b[A'|k) if ((cursor>0)); then ((cursor--)); else cursor=$((N>0?N-1:0)); fi ;;
+    $'\x1b[B'|j) if ((N>0 && cursor<N-1)); then ((cursor++)); else cursor=0; fi ;;
+    $'\x1b[C'|l) if [ "$N" -gt 0 ] && [ "${ISDIR[$cursor]}" = 1 ]; then CURDIR="$(relpath "${NAMES[$cursor]}")"; echo "  opening ${NAMES[$cursor]} …"; measure; cursor=0; fi ;;
+    $'\x1b[D'|h) if [ -n "$CURDIR" ]; then if [[ "$CURDIR" == */* ]]; then CURDIR="${CURDIR%/*}"; else CURDIR=""; fi; measure; cursor=0; fi ;;
+    ' ') [ "$N" -gt 0 ] && toggle "$(relpath "${NAMES[$cursor]}")" "${BYTES[$cursor]}" ;;
+    a|A) for ((i=0;i<N;i++)); do rp="$(relpath "${NAMES[$i]}")"; included "$rp" || toggle "$rp" "${BYTES[$i]}"; done ;;
+    g|G) break ;;
+    q|Q) printf '\033[H\033[J'; echo "  cancelled — nothing copied."; exit 0 ;;
   esac
 done
 printf '\033[H\033[J'
 
-# ---------- collect + confirm ----------
-chosen=(); ctot=0
-for ((i=0;i<N;i++)); do [ "${SEL[$i]}" = 1 ] && { chosen+=("$i"); ctot=$((ctot+${BYTES[$i]})); }; done
-[ "${#chosen[@]}" -eq 0 ] && { echo "  nothing selected."; exit 0; }
-echo "  Backing up ${#chosen[@]} folder(s), $(fmtG $ctot):"
-for i in "${chosen[@]}"; do echo "    • ${NAMES[$i]}  ($(fmtG ${BYTES[$i]}))"; done
-read -rp "  Proceed? [y/N] " ok
-[[ "${ok,,}" == y* ]] || { echo "  cancelled."; exit 0; }
-
-# ---------- back up each selected folder ----------
-mkdir -p "$DEST"
-for i in "${chosen[@]}"; do
-  printf '\n\033[1m══ %s ══\033[0m\n' "${NAMES[$i]}"
-  rsync "${FLAGS[@]}" "$SRC/${NAMES[$i]}" "$DEST/"
-  case $? in 0) echo "  ✓ done";; 24) echo "  ✓ done (a few files changed mid-copy — re-run to catch)";; *) echo "  ! re-run to finish";; esac
+# ---------- collect top-most selected paths (drop ones covered by a selected ancestor) ----------
+picks=()
+for sp in "${!SELECTED[@]}"; do
+  anc="$sp"; covered=0
+  while [[ "$anc" == */* ]]; do anc="${anc%/*}"; [ -n "${SELECTED[$anc]:-}" ] && { covered=1; break; }; done
+  [ "$covered" = 0 ] && picks+=("$sp")
 done
-echo
-echo "  All selected folders copied. Verify before trusting:"
-echo "    drive-backup-selective --check \"$SRC\" \"$NAME\""
-echo "  (keep the drive originals until --check is clean)"
+[ "${#picks[@]}" -eq 0 ] && { echo "  nothing selected."; exit 0; }
+
+echo "  Backing up (≈ $(fmtG "$SELSIZE")):"
+for sp in "${picks[@]}"; do
+  exwithin=""; for ep in "${!EXCLUDED[@]}"; do [[ "$ep" == "$sp/"* ]] && exwithin+=" (skip ${ep#$sp/})"; done
+  echo "    • $sp$exwithin"
+done
+read -rp "  Proceed? [y/N] " ok; [[ "${ok,,}" == y* ]] || { echo "  cancelled."; exit 0; }
+
+mkdir -p "$DEST"
+for sp in "${picks[@]}"; do
+  printf '\n\033[1m══ %s ══\033[0m\n' "$sp"
+  exargs=(); for ep in "${!EXCLUDED[@]}"; do [[ "$ep" == "$sp/"* ]] && exargs+=(--exclude="/$ep"); done
+  rsync "${FLAGS[@]}" "${exargs[@]}" -R "$SRC/./$sp" "$DEST/"
+  case $? in 0) echo "  ✓ done";; 24) echo "  ✓ done (a few files changed mid-copy — re-run)";; *) echo "  ! re-run to finish";; esac
+done
+echo; echo "  Done. Verify before trusting:  drive-backup-selective --check \"$SRC\" \"$NAME\""
