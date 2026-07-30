@@ -24,12 +24,33 @@ case "${1:-}" in
   --check) MODE="check"; shift ;;
   -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
 esac
-SRC="${1:?usage: drive-backup-selective [--check] <mount> [name]}"
-NAME="${2:-$(basename "$SRC")}"
-DEST="$DEST_ROOT/$NAME"
 
 findmnt "$NAS_MNT" >/dev/null 2>&1 || { echo "✗ NAS not mounted at $NAS_MNT — sudo mount $NAS_MNT"; exit 1; }
-findmnt "$SRC"     >/dev/null 2>&1 || { echo "✗ source is not a mounted drive: $SRC"; exit 1; }
+
+# known NTFS drives (label|mountpoint|backup-name)
+DRIVES=(
+  "2ndPro|/mnt/2ndPro|2ndPro"
+  "980Pro|/run/media/taubut/980Pro|980Pro"
+  "Basic Data|/run/media/taubut/E2C02718C026F289|Basic-Data"
+)
+
+if [ -n "${1:-}" ]; then
+  SRC="$1"; NAME="${2:-$(basename "$SRC")}"
+else
+  # no drive given → ask which one (only lists ones that are mounted)
+  avail=()
+  for d in "${DRIVES[@]}"; do IFS='|' read -r lbl mnt nm <<<"$d"; findmnt "$mnt" >/dev/null 2>&1 && avail+=("$d"); done
+  [ "${#avail[@]}" -eq 0 ] && { echo "No NTFS drives mounted (2ndPro / 980Pro / Basic Data)."; exit 1; }
+  echo "  Which drive do you want to selectively back up?"
+  i=1; for d in "${avail[@]}"; do IFS='|' read -r lbl mnt nm <<<"$d"; printf "   %d) %-12s %s\n" "$i" "$lbl" "$mnt"; i=$((i+1)); done
+  echo "   q) quit"
+  read -rp "  choose: " c
+  { [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -ge 1 ] && [ "$c" -le "${#avail[@]}" ]; } || { echo "  bye"; exit 0; }
+  IFS='|' read -r _ SRC NAME <<<"${avail[$((c-1))]}"
+fi
+DEST="$DEST_ROOT/$NAME"
+
+findmnt "$SRC" >/dev/null 2>&1 || { echo "✗ source is not a mounted drive: $SRC"; exit 1; }
 
 # rsync flags — NTFS-friendly + skip trash/recycle/system junk
 FLAGS=( -rlt --no-perms --no-owner --no-group --no-D --modify-window=2 --partial
