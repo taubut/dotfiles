@@ -6,22 +6,29 @@
 # (SPACE) what to back up at ANY depth. Tick a folder to take all of it, or open
 # it and un-tick the junk inside (e.g. keep Users, skip Users/…/AppData). Shows
 # each folder's size (GiB) + a running "selected" total. rsyncs only your picks.
-# Resumable. Verify with --check.
+# Resumable.
 #
 #   drive-backup-selective                 pick a drive, then browse + tick
 #   drive-backup-selective <mount> [name]  browse a specific drive
-#   drive-backup-selective --check <mount> [name]   verify what's in the backup
+#   drive-backup-selective --check <mount> [name]        verify the backup (fast)
+#   drive-backup-selective --check --deep <mount> [name] verify byte-for-byte (slow)
+#
+# --check only looks at what's IN the backup — folders/files you skipped are
+# ignored (no false "missing" alarms). It flags any backed-up file that doesn't
+# match the drive. --deep adds full checksums (re-reads everything; slow).
 # Destination: /mnt/unraid-backup/windows-backup/<name>/
 # =============================================================================
 set -uo pipefail
 
 NAS_MNT="/mnt/unraid-backup"
 DEST_ROOT="$NAS_MNT/windows-backup"
-MODE="pick"
-case "${1:-}" in
+MODE="pick"; DEEP=0
+while :; do case "${1:-}" in
   --check) MODE="check"; shift ;;
+  --deep)  DEEP=1; shift ;;
   -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
-esac
+  *) break ;;
+esac; done
 findmnt "$NAS_MNT" >/dev/null 2>&1 || { echo "✗ NAS not mounted at $NAS_MNT — sudo mount $NAS_MNT"; exit 1; }
 
 DRIVES=( "2ndPro|/mnt/2ndPro|2ndPro" "980Pro|/run/media/taubut/980Pro|980Pro" "Basic Data|/run/media/taubut/E2C02718C026F289|Basic-Data" )
@@ -45,14 +52,27 @@ FLAGS=( -rlt --no-perms --no-owner --no-group --no-D --modify-window=2 --partial
 fmtG(){ awk -v b="${1:-0}" 'BEGIN{printf "%8.1f GiB", b/1073741824}'; }
 skip(){ case "$1" in '.Trash-'*|'$RECYCLE.BIN'|'System Volume Information'|hiberfil.sys|pagefile.sys|swapfile.sys) return 0;; *) return 1;; esac; }
 
-# ---------- VERIFY ----------
+# ---------- VERIFY (only checks what's IN the backup; ignores what you skipped) ----------
 if [ "$MODE" = "check" ]; then
   [ -d "$DEST" ] || { echo "no backup at $DEST"; exit 1; }
-  echo "== Verifying backed-up folders vs the drive (checksum) =="
-  ( cd "$DEST" && find . -mindepth 1 -maxdepth 1 -printf '%P\n' ) | while read -r n; do
-    echo "── $n"; rsync "${FLAGS[@]}" --checksum --dry-run --itemize-changes "$SRC/$n/" "$DEST/$n/" 2>/dev/null
-  done
-  echo "== nothing listed under a name = perfect match =="; exit 0
+  CK=( -rlt --no-perms --no-owner --no-group --no-D --modify-window=2 --dry-run --itemize-changes
+       --exclude='.Trash-*' --exclude='$RECYCLE.BIN' --exclude='System Volume Information' )
+  if [ "$DEEP" = 1 ]; then CK+=(--checksum); echo "== Deep verify (byte-for-byte — re-reads everything, slow) =="
+  else echo "== Verify: every backed-up file present + matches the drive =="; fi
+  echo "  (only what's in the backup is checked — folders/files you skipped are ignored)"
+  echo "  ────────────────────────────────────────────────────────────"
+  bad=0
+  while IFS= read -r n; do
+    # keep only FILE lines (^.f) that already exist in the backup but differ.
+    # '+++' lines = files on the drive that aren't in the backup = your skips → ignored.
+    out="$(rsync "${CK[@]}" "$SRC/$n" "$DEST/" 2>/dev/null | grep -E '^.f' | grep -vE '\+\+\+' || true)"
+    if [ -z "$out" ]; then printf "  \033[32m✓\033[0m %s\n" "$n"
+    else printf "  \033[31m✗\033[0m %s — these backed-up files DON'T match the drive:\n" "$n"; echo "$out" | sed 's/^/        /'; bad=1; fi
+  done < <( cd "$DEST" && find . -mindepth 1 -maxdepth 1 -printf '%P\n' | sort )
+  echo "  ────────────────────────────────────────────────────────────"
+  if [ "$bad" = 0 ]; then echo "  ✓ Everything in the backup matches the drive — safe to wipe it."
+  else echo "  ✗ Some files above didn't match — re-run the backup for those folders, then re-check."; fi
+  exit 0
 fi
 
 # ---------- TREE NAVIGATOR ----------
