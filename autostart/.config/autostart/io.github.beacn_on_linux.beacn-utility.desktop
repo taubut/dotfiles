@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Beacn Utility
+Comment=A Tool for Configuring Beacn Devices
+Exec="/usr/bin/beacn-utility" --startup
+Terminal=false

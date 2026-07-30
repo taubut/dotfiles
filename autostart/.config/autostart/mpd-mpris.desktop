@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=MPD MPRIS Bridge
+Exec=mpd-mpris
+X-KDE-autostart-after=panel

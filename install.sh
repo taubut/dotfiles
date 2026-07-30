@@ -2,8 +2,8 @@
 # =============================================================================
 # Dotfiles Install Script (Quick)
 # =============================================================================
-# Symlinks configs using GNU Stow - use this for quick updates
-# For full restore on fresh install, use restore.sh instead
+# Symlinks configs using GNU Stow - use this for quick updates on a machine
+# that's already set up. For a fresh install, use ./fresh-start.sh instead.
 # =============================================================================
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
@@ -18,25 +18,27 @@ mkdir -p ~/.local/share
 
 cd "$DOTFILES"
 
-# Stow all packages
+# Stow all packages — keep in sync with fresh-start.sh STOW_PACKAGES
 STOW_PACKAGES=(
+    kde
+    autostart
+    fluidsynth
+    scripts
+    shell
+    terminal
+    browser
+    fetch
+    input-remapper
+    launcher
+    music
+    newsboat
+    wallust
+    yazi
+    yt-dlp
     mako
     sway
     waybar
     wlogout
-    browser
-    fetch
-    input-remapper
-    kde
-    launcher
-    music
-    niri
-    scripts
-    shell
-    terminal
-    wallust
-    yazi
-    yt-dlp
 )
 
 for pkg in "${STOW_PACKAGES[@]}"; do

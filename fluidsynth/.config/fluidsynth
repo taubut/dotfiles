@@ -1,0 +1,2 @@
+SOUND_FONT=/home/taubut/.local/share/soundfonts/SC-55 Roland SOUNDCanvas Up.sf2
+OTHER_OPTS=-a pipewire -m alsa_seq -r 48000

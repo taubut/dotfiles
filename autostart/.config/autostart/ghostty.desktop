@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Ghostty Terminal
+Exec=ghostty --class=ghostty-main
+X-KDE-autostart-after=panel

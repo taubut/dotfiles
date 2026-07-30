@@ -1,0 +1,6 @@
+[Desktop Entry]
+Exec=/home/taubut/.config/old-autostart-scripts/openrgb-profile.sh
+Icon=application-x-executable-script
+Name=openrgb-profile.sh
+Type=Application
+X-KDE-AutostartScript=true

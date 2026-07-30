@@ -1,0 +1,6 @@
+[Desktop Entry]
+Exec=/home/taubut/.local/bin/2ndPro-mount
+Icon=application-x-shellscript
+Name=2ndPro-mount
+Type=Application
+X-KDE-AutostartScript=true

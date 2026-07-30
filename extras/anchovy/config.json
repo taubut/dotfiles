@@ -1,0 +1,34 @@
+{
+  "theme": "Catppuccin Latte",
+  "font_family": "JetBrains Mono",
+  "font_size": 11,
+  "font_weight": "Bold",
+  "max_results": 12,
+  "fuzzy_threshold": 45,
+  "web_search_enabled": true,
+  "web_search_engine": "https://duckduckgo.com/?q={query}",
+  "show_frequent_on_empty": true,
+  "animations_enabled": true,
+  "sound_enabled": false,
+  "rounded_icons": true,
+  "aliases": {
+    "mpv": "mpv {query}",
+    "yt": "xdg-open https://www.youtube.com/results?search_query={query}"
+  },
+  "animation_speed": 100,
+  "file_search_depth": 3,
+  "file_search_dirs": [
+    "~/Documents",
+    "~/Downloads",
+    "~/Desktop",
+    "~/Pictures",
+    "~/Videos",
+    "~/Music"
+  ],
+  "hotkey": "Meta+Space",
+  "search_sources": [
+    "apps",
+    "files"
+  ],
+  "show_recent_on_empty": false
+}
