@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# =============================================================================
+# backup-menu — pick what to back up to the NAS, then run it (in YOUR terminal).
+# =============================================================================
+# Interactive front-end for pre-wipe-backup (Linux home) and drive-backup
+# (Windows/NTFS drives). Shows a menu, you choose, it runs each with a clean
+# single-line % progress. Resumable — safe to Ctrl-C and re-run. It's a LAN
+# transfer, so it does NOT depend on the internet.
+# =============================================================================
+set -uo pipefail
+
+NAS_MNT="/mnt/unraid-backup"
+findmnt "$NAS_MNT" >/dev/null 2>&1 || { echo "✗ NAS not mounted at $NAS_MNT — run: sudo mount $NAS_MNT"; exit 1; }
+
+# --- targets: TYPE|LABEL|SOURCE|DESTNAME  (drives listed only if mounted) ----
+TARGETS=()
+TARGETS+=("home|Linux home (dotfiles, Faugus/WoW, configs…)|$HOME|-")
+for spec in \
+  "2ndPro drive|/mnt/2ndPro|2ndPro" \
+  "980Pro drive|/run/media/taubut/980Pro|980Pro" \
+  "Basic Data partition|/run/media/taubut/E2C02718C026F289|Basic-Data"; do
+  IFS='|' read -r lbl src nm <<<"$spec"
+  findmnt "$src" >/dev/null 2>&1 && TARGETS+=("drive|$lbl|$src|$nm")
+done
+
+used_of(){ df -h --output=used "$1" 2>/dev/null | tail -1 | tr -d ' '; }
+
+echo
+echo "  What do you want to back up?   (NAS: $NAS_MNT, $(df -h --output=avail "$NAS_MNT" | tail -1 | tr -d ' ') free)"
+echo "  ──────────────────────────────────────────────────────────────"
+i=1
+for t in "${TARGETS[@]}"; do
+  IFS='|' read -r type lbl src nm <<<"$t"
+  if [ "$type" = home ]; then
+    printf "   %d) %-40s → CachyOS-FreshStart/home\n" "$i" "$lbl"
+  else
+    printf "   %d) %-28s (%6s used) → windows-backup/%s\n" "$i" "$lbl" "$(used_of "$src")" "$nm"
+  fi
+  i=$((i+1))
+done
+echo "   a) everything above"
+echo "   q) quit"
+echo "  ──────────────────────────────────────────────────────────────"
+
+read -rp "  Enter numbers (e.g. '2 3'), 'a' for all, 'q' to quit: " sel
+[ "${sel,,}" = q ] && { echo "  nothing to do."; exit 0; }
+
+chosen=()
+if [ "${sel,,}" = a ]; then
+  for ((j=1; j<=${#TARGETS[@]}; j++)); do chosen+=("$j"); done
+else
+  for n in $sel; do
+    if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le "${#TARGETS[@]}" ]; then chosen+=("$n")
+    else echo "  (ignoring invalid choice: $n)"; fi
+  done
+fi
+[ "${#chosen[@]}" -eq 0 ] && { echo "  nothing selected."; exit 0; }
+
+echo; echo "  Will back up:"
+for n in "${chosen[@]}"; do IFS='|' read -r type lbl src nm <<<"${TARGETS[$((n-1))]}"; echo "    • $lbl"; done
+read -rp "  Proceed? [y/N] " ok
+[[ "${ok,,}" == y* ]] || { echo "  cancelled."; exit 0; }
+
+# --- run each selected target ------------------------------------------------
+did_drive=0
+for n in "${chosen[@]}"; do
+  IFS='|' read -r type lbl src nm <<<"${TARGETS[$((n-1))]}"
+  printf '\n\033[1m══ %s ══\033[0m\n' "$lbl"
+  if [ "$type" = home ]; then pre-wipe-backup
+  else drive-backup "$src" "$nm"; did_drive=1; fi
+done
+
+# --- offer checksum verify for any drives we backed up -----------------------
+if [ "$did_drive" = 1 ]; then
+  echo
+  read -rp "  Verify the drive backup(s) by checksum now? (recommended before a wipe) [y/N] " v
+  if [[ "${v,,}" == y* ]]; then
+    for n in "${chosen[@]}"; do
+      IFS='|' read -r type lbl src nm <<<"${TARGETS[$((n-1))]}"
+      [ "$type" = drive ] || continue
+      printf '\n\033[1m══ verify: %s ══\033[0m\n' "$lbl"
+      drive-backup --check "$src" "$nm"
+    done
+  fi
+fi
+echo; echo "  All done. Keep drive originals until --check shows a clean match."
