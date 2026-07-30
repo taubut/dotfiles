@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# backup-menu — pick what to back up to the NAS, then run it (in YOUR terminal).
+# backup-menu — interactive CHECKBOX picker for NAS backups (run in YOUR terminal)
 # =============================================================================
-# Interactive front-end for pre-wipe-backup (Linux home) and drive-backup
-# (Windows/NTFS drives). Shows a menu, you choose, it runs each with a clean
-# single-line % progress. Resumable — safe to Ctrl-C and re-run. It's a LAN
-# transfer, so it does NOT depend on the internet.
+# Toggle items on/off, then Enter to start. Runs each selected target in
+# sequence (never in parallel) via pre-wipe-backup / drive-backup, with clean
+# single-line % progress, then offers a checksum verify for the drives.
+# Resumable — safe to Ctrl-C and re-run. LAN transfer; internet-independent.
 # =============================================================================
 set -uo pipefail
 
@@ -22,49 +22,75 @@ for spec in \
   IFS='|' read -r lbl src nm <<<"$spec"
   findmnt "$src" >/dev/null 2>&1 && TARGETS+=("drive|$lbl|$src|$nm")
 done
+N=${#TARGETS[@]}
+
+# is a home backup already running (in another terminal)?
+HOME_RUNNING=0
+pgrep -f 'rsync.*CachyOS-FreshStart' >/dev/null 2>&1 && HOME_RUNNING=1
+
+# selection state (0/1 per target)
+SEL=(); for ((i=0; i<N; i++)); do SEL+=(0); done
 
 used_of(){ df -h --output=used "$1" 2>/dev/null | tail -1 | tr -d ' '; }
+FREE="$(df -h --output=avail "$NAS_MNT" 2>/dev/null | tail -1 | tr -d ' ')"
 
-echo
-echo "  What do you want to back up?   (NAS: $NAS_MNT, $(df -h --output=avail "$NAS_MNT" | tail -1 | tr -d ' ') free)"
-echo "  ──────────────────────────────────────────────────────────────"
-i=1
-for t in "${TARGETS[@]}"; do
-  IFS='|' read -r type lbl src nm <<<"$t"
-  if [ "$type" = home ]; then
-    printf "   %d) %-40s → CachyOS-FreshStart/home\n" "$i" "$lbl"
-  else
-    printf "   %d) %-28s (%6s used) → windows-backup/%s\n" "$i" "$lbl" "$(used_of "$src")" "$nm"
-  fi
-  i=$((i+1))
-done
-echo "   a) everything above"
-echo "   q) quit"
-echo "  ──────────────────────────────────────────────────────────────"
-
-read -rp "  Enter numbers (e.g. '2 3'), 'a' for all, 'q' to quit: " sel
-[ "${sel,,}" = q ] && { echo "  nothing to do."; exit 0; }
-
-chosen=()
-if [ "${sel,,}" = a ]; then
-  for ((j=1; j<=${#TARGETS[@]}; j++)); do chosen+=("$j"); done
-else
-  for n in $sel; do
-    if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le "${#TARGETS[@]}" ]; then chosen+=("$n")
-    else echo "  (ignoring invalid choice: $n)"; fi
+draw(){
+  printf '\033[H\033[J'   # clear screen, cursor home
+  echo
+  echo "  Backup picker — check off what you want   (NAS: $FREE free)"
+  echo "  ──────────────────────────────────────────────────────────────────"
+  local i type lbl src nm box extra
+  for ((i=0; i<N; i++)); do
+    IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"
+    box="[ ]"; [ "${SEL[$i]}" = 1 ] && box="[✓]"
+    if [ "$type" = home ]; then
+      extra=""; [ "$HOME_RUNNING" = 1 ] && extra="   ⏳ already running elsewhere"
+      printf "   %s  %d) %-40s → CachyOS-FreshStart/home%s\n" "$box" "$((i+1))" "$lbl" "$extra"
+    else
+      printf "   %s  %d) %-26s (%6s used) → windows-backup/%s\n" "$box" "$((i+1))" "$lbl" "$(used_of "$src")" "$nm"
+    fi
   done
-fi
+  echo "  ──────────────────────────────────────────────────────────────────"
+  echo "   type a number = toggle   ·   a = all/none   ·   Enter = start   ·   q = quit"
+}
+
+# --- selection loop ----------------------------------------------------------
+while true; do
+  draw
+  read -rp "  > " k
+  case "${k,,}" in
+    q)  echo "  cancelled."; exit 0 ;;
+    "") break ;;
+    a)  allsel=1; for ((i=0; i<N; i++)); do [ "${SEL[$i]}" = 1 ] || allsel=0; done
+        for ((i=0; i<N; i++)); do [ "$allsel" = 1 ] && SEL[$i]=0 || SEL[$i]=1; done ;;
+    *)  if [[ "$k" =~ ^[0-9]+$ ]] && [ "$k" -ge 1 ] && [ "$k" -le "$N" ]; then
+          idx=$((k-1)); [ "${SEL[$idx]}" = 1 ] && SEL[$idx]=0 || SEL[$idx]=1
+        fi ;;
+  esac
+done
+
+# --- collect + confirm -------------------------------------------------------
+chosen=(); for ((i=0; i<N; i++)); do [ "${SEL[$i]}" = 1 ] && chosen+=("$i"); done
 [ "${#chosen[@]}" -eq 0 ] && { echo "  nothing selected."; exit 0; }
 
-echo; echo "  Will back up:"
-for n in "${chosen[@]}"; do IFS='|' read -r type lbl src nm <<<"${TARGETS[$((n-1))]}"; echo "    • $lbl"; done
+for i in "${chosen[@]}"; do
+  IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"
+  if [ "$type" = home ] && [ "$HOME_RUNNING" = 1 ]; then
+    read -rp "  Home backup is already running elsewhere — run it here too? [y/N] " a
+    [[ "${a,,}" == y* ]] || { echo "  Re-open the menu and leave home unchecked."; exit 0; }
+  fi
+done
+
+echo; echo "  Will back up (one at a time, in order):"
+for i in "${chosen[@]}"; do IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"; echo "    • $lbl"; done
+[ "$HOME_RUNNING" = 1 ] && echo "  Note: a home backup is running elsewhere — these will share NAS bandwidth."
 read -rp "  Proceed? [y/N] " ok
 [[ "${ok,,}" == y* ]] || { echo "  cancelled."; exit 0; }
 
-# --- run each selected target ------------------------------------------------
+# --- run each selected target sequentially -----------------------------------
 did_drive=0
-for n in "${chosen[@]}"; do
-  IFS='|' read -r type lbl src nm <<<"${TARGETS[$((n-1))]}"
+for i in "${chosen[@]}"; do
+  IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"
   printf '\n\033[1m══ %s ══\033[0m\n' "$lbl"
   if [ "$type" = home ]; then pre-wipe-backup
   else drive-backup "$src" "$nm"; did_drive=1; fi
@@ -75,12 +101,12 @@ if [ "$did_drive" = 1 ]; then
   echo
   read -rp "  Verify the drive backup(s) by checksum now? (recommended before a wipe) [y/N] " v
   if [[ "${v,,}" == y* ]]; then
-    for n in "${chosen[@]}"; do
-      IFS='|' read -r type lbl src nm <<<"${TARGETS[$((n-1))]}"
+    for i in "${chosen[@]}"; do
+      IFS='|' read -r type lbl src nm <<<"${TARGETS[$i]}"
       [ "$type" = drive ] || continue
       printf '\n\033[1m══ verify: %s ══\033[0m\n' "$lbl"
       drive-backup --check "$src" "$nm"
     done
   fi
 fi
-echo; echo "  All done. Keep drive originals until --check shows a clean match."
+echo; echo "  Done. Keep drive originals until --check shows a clean match."
