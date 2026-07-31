@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# =============================================================================
+# install-all — install EVERY package from package-list.txt at its LATEST
+# version, from the official repos + AUR. Bulletproof:
+#   • bootstraps paru if missing
+#   • pre-clears the known conflicts (jack2 -> pipewire-jack; skips
+#     cachyos-hyprland-settings which fights your KDE settings)
+#   • fast batch for repo packages, then a RESILIENT one-by-one sweep so a
+#     single dead/renamed package can't abort everything
+#   • keeps sudo alive so a long AUR build session never stalls for a password
+#
+#   bash ~/dotfiles/install-all      # run as YOU (not sudo) — paru needs a normal user
+# =============================================================================
+set -uo pipefail
+[ "$(id -u)" -eq 0 ] && { echo "Don't sudo this — just run 'bash ~/dotfiles/install-all'. It asks for your password itself."; exit 1; }
+
+LIST="$HOME/dotfiles/package-list.txt"
+[ -f "$LIST" ] || { echo "✗ $LIST not found"; exit 1; }
+
+echo "══════ keep sudo alive for the whole run ══════"
+sudo -v || { echo "✗ need sudo"; exit 1; }
+( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done ) &
+KEEP=$!; trap 'kill "$KEEP" 2>/dev/null' EXIT
+
+echo "══════ 1/6 · AUR helper ══════"
+if command -v paru >/dev/null 2>&1; then echo "  ✓ paru present"
+else
+  echo "  installing paru…"
+  sudo pacman -S --needed --noconfirm paru || {
+    sudo pacman -S --needed --noconfirm git base-devel
+    t="$(mktemp -d)"; git clone https://aur.archlinux.org/paru-bin.git "$t/p" && ( cd "$t/p" && makepkg -si --noconfirm ); rm -rf "$t"
+  }
+  command -v paru >/dev/null 2>&1 || { echo "  ✗ couldn't get paru"; exit 1; }
+fi
+
+echo "══════ 2/6 · clear the jack2 conflict (you use pipewire-jack) ══════"
+if pacman -Qq jack2 >/dev/null 2>&1; then sudo pacman -Rdd --noconfirm jack2 && echo "  ✓ removed jack2"; else echo "  ✓ already gone"; fi
+
+echo "══════ 3/6 · refresh package databases ══════"
+sudo pacman -Sy
+
+echo "══════ 4/6 · build the list ══════"
+mapfile -t pkgs < <(grep -vE '^[[:space:]]*(#|$)' "$LIST" | awk '{print $1}' | grep -vxE 'cachyos-hyprland-settings' | sort -u)
+echo "  ${#pkgs[@]} packages to install"
+
+echo "══════ 5/6 · fast pass: everything in the official repos, one transaction ══════"
+repo=()
+for p in "${pkgs[@]}"; do pacman -Sp "$p" >/dev/null 2>&1 && repo+=("$p"); done
+echo "  ${#repo[@]} are repo packages…"
+[ "${#repo[@]}" -gt 0 ] && { sudo pacman -S --needed --noconfirm "${repo[@]}" || echo "  (repo batch hiccup — the sweep will mop up)"; }
+
+echo "══════ 6/6 · resilient sweep: AUR + anything still missing (one at a time) ══════"
+fail=(); i=0; n=${#pkgs[@]}
+for p in "${pkgs[@]}"; do
+  i=$((i+1))
+  pacman -Qq "$p" >/dev/null 2>&1 && continue
+  printf "  [%d/%d] installing %s …\n" "$i" "$n" "$p"
+  paru -S --needed --noconfirm "$p" </dev/null || { echo "     ⚠ $p failed — skipping"; fail+=("$p"); }
+done
+
+echo
+echo "══════ DONE ══════"
+got=0; for p in "${pkgs[@]}"; do pacman -Qq "$p" >/dev/null 2>&1 && got=$((got+1)); done
+echo "  ✅ installed: $got / ${#pkgs[@]}"
+if [ "${#fail[@]}" -gt 0 ]; then
+  echo "  ⚠️  couldn't install (${#fail[@]}) — renamed/removed upstream; sort out later:"
+  printf '     %s\n' "${fail[@]}"
+fi
+echo "  → log out/in (or reboot) and your apps + menu are back."

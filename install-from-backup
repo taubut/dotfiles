@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# =============================================================================
+# install-from-backup — reinstall your packages straight from the .pkg cache in
+# your NAS backup. NO AUR rebuilds, NO re-downloading your apps. It uses the
+# exact package files you already had; only shared dependencies (if any) come
+# from the official repos.
+#
+#   sudo bash ~/dotfiles/install-from-backup
+# =============================================================================
+set -uo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "Run with sudo:  sudo bash $0"; exit 1; }
+
+USERHOME="/home/${SUDO_USER:-taubut}"
+NAS_MNT="/mnt/unraid-backup"
+BK="$NAS_MNT/CachyOS-FreshStart"
+LIST="$USERHOME/dotfiles/package-list.txt"
+
+echo "══════════ 1. NAS (where your backup lives) ══════════"
+if findmnt "$NAS_MNT" >/dev/null 2>&1; then
+  echo "  ✓ already mounted"
+else
+  command -v mount.nfs >/dev/null 2>&1 || { echo "  installing nfs-utils…"; pacman -S --needed --noconfirm nfs-utils; }
+  mkdir -p "$NAS_MNT"
+  echo "  mounting 192.168.1.185:/mnt/user/CachyOSBackup …"
+  mount -t nfs 192.168.1.185:/mnt/user/CachyOSBackup "$NAS_MNT" \
+    || { echo "  ✗ couldn't mount the NAS — is your network up and the Unraid box on?"; exit 1; }
+  echo "  ✓ mounted"
+fi
+
+echo "══════════ 2. locate your package cache in the backup ══════════"
+CACHE="$BK/root/var/cache/pacman/pkg"
+if [ ! -d "$CACHE" ] || ! ls "$CACHE"/*.pkg.tar.* >/dev/null 2>&1; then
+  echo "  ✗ no .pkg cache at: $CACHE"
+  echo "    what IS under $BK/root:"; ls "$BK/root" 2>/dev/null | sed 's/^/      /'
+  echo "    → your pacman cache may not have been captured; can't do a cache-only install."
+  exit 2
+fi
+total=$(ls "$CACHE"/*.pkg.tar.* 2>/dev/null | grep -vc '\.sig$')
+echo "  ✓ found $total cached package files"
+
+echo "══════════ 3. build an accurate filename → package map ══════════"
+declare -A pick
+while IFS= read -r f; do
+  b="$(basename "$f")"; b="${b%.pkg.tar.*}"                 # strip .pkg.tar.zst
+  name="$(printf '%s' "$b" | sed -E 's/-[^-]+-[^-]+-[^-]+$//')"  # strip ver-rel-arch (handles x86_64_v3/_v4/any)
+  pick["$name"]="$f"                                        # sorted → newest wins
+done < <(find "$CACHE" -maxdepth 1 -name '*.pkg.tar.*' ! -name '*.sig' | sort -V)   # NEVER match .sig files
+echo "  ✓ mapped ${#pick[@]} distinct packages in the cache"
+
+echo "══════════ 4. what's missing on this fresh box ══════════"
+mapfile -t want < <(grep -vE '^[[:space:]]*(#|$)' "$LIST" | awk '{print $1}')
+files=(); notfound=(); skip=()
+for p in "${want[@]}"; do
+  [ "$p" = "cachyos-hyprland-settings" ] && { skip+=("$p"); continue; }   # conflicts w/ your KDE settings
+  pacman -Qq "$p" >/dev/null 2>&1 && continue                            # already installed
+  if [ -n "${pick[$p]:-}" ]; then files+=("${pick[$p]}"); else notfound+=("$p"); fi
+done
+echo "  to install from cache: ${#files[@]}    not in cache: ${#notfound[@]}"
+
+echo "══════════ 5. clear the known conflict (jack2 → pipewire-jack) ══════════"
+if pacman -Qq jack2 >/dev/null 2>&1; then pacman -Rdd --noconfirm jack2 && echo "  ✓ removed jack2"; else echo "  (jack2 already gone)"; fi
+
+echo "══════════ 6. refresh repo db (for shared deps only) ══════════"
+pacman -Sy --noconfirm >/dev/null 2>&1 && echo "  ✓ db refreshed" || echo "  (db refresh skipped)"
+
+echo "══════════ 7. INSTALL from your cached .pkg files ══════════"
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "  nothing to install from cache."
+else
+  pacman -U --needed --noconfirm "${files[@]}"
+  rc=$?
+  echo "  pacman exit: $rc"
+fi
+
+echo
+echo "══════════ SUMMARY ══════════"
+echo "  installed from your cache: ${#files[@]}"
+[ "${#skip[@]}" -gt 0 ] && echo "  intentionally skipped: ${skip[*]}"
+if [ "${#notfound[@]}" -gt 0 ]; then
+  echo "  NOT in your cache (${#notfound[@]}) — these were never cached; left alone:"
+  printf '    %s\n' "${notfound[@]}"
+fi
+echo "  Done. Log out/in to see your apps in the menu."

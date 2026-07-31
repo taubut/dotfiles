@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# =============================================================================
+# setup-data-drives — format the two blank NVMe drives as btrfs (zstd), mount
+# them under your home, own them, and auto-mount on boot.
+#   nvme2n1 (931GB) -> label "Games"   -> ~/Games
+#   nvme1n1 (1.8TB) -> label "Storage" -> ~/Storage
+#
+#   sudo bash ~/dotfiles/setup-data-drives
+# Refuses to touch a disk that already has partitions (safety).
+# =============================================================================
+set -euo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "Run with sudo:  sudo bash $0"; exit 1; }
+U="${SUDO_USER:-taubut}"; H="/home/$U"
+
+# disk  label     mountpoint
+rows=(
+  "nvme2n1  Games    $H/Games"
+  "nvme1n1  Storage  $H/Storage"
+)
+
+echo "This will FORMAT (blank drives only):"
+for r in "${rows[@]}"; do read -r d l m <<<"$r"; printf "  /dev/%s  → %-8s → %s\n" "$d" "$l" "$m"; done
+echo
+
+# safety: refuse only on REAL-data signals — existing partitions or a mount.
+# (A stale residual signature on a partition-less disk is cleared by wipefs below.)
+for r in "${rows[@]}"; do
+  read -r d l m <<<"$r"
+  [ -b "/dev/$d" ] || { echo "✗ /dev/$d not found — aborting"; exit 1; }
+  if lsblk -no NAME "/dev/$d" | grep -q "${d}p"; then echo "✗ /dev/$d has partitions — refusing (not blank)"; exit 1; fi
+  if lsblk -no MOUNTPOINT "/dev/$d" | grep -q .; then echo "✗ /dev/$d is mounted — refusing"; exit 1; fi
+done
+
+for r in "${rows[@]}"; do
+  read -r d l m <<<"$r"
+  dev="/dev/$d"; part="${dev}p1"
+  echo "══ $dev → $l → $m ══"
+  wipefs -a "$dev" >/dev/null 2>&1 || true   # clear any stale/residual signature
+  parted -s "$dev" mklabel gpt mkpart "$l" btrfs 0% 100%
+  partprobe "$dev"; udevadm settle 2>/dev/null || sleep 1
+  mkfs.btrfs -f -L "$l" "$part"
+  uuid="$(blkid -s UUID -o value "$part")"
+  mkdir -p "$m"
+  if ! grep -q "$uuid" /etc/fstab; then
+    echo "UUID=$uuid  $m  btrfs  defaults,noatime,compress=zstd,nofail  0 0" >> /etc/fstab
+  fi
+  systemctl daemon-reload
+  mount "$m"
+  chown "$U:$U" "$m"
+  echo "  ✓ $l ready — $(df -h "$m" | awk 'NR==2{print $4" free of "$2}')"
+done
+
+echo
+echo "DONE. ~/Games and ~/Storage are mounted, yours to write, and auto-mount every boot."
