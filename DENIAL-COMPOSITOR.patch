@@ -1,0 +1,744 @@
+diff --git a/compositor/src/bin/deniald.rs b/compositor/src/bin/deniald.rs
+index 5119595..aecb5a0 100644
+--- a/compositor/src/bin/deniald.rs
++++ b/compositor/src/bin/deniald.rs
+@@ -21,6 +21,8 @@ mod hotplug_transaction;
+ #[cfg(feature = "flutter")]
+ #[path = "deniald/idle_policy.rs"]
+ mod idle_policy;
++#[path = "deniald/keybinds.rs"]
++mod keybinds;
+ #[path = "deniald/kms_state.rs"]
+ mod kms_state;
+ #[path = "deniald/lifecycle.rs"]
+@@ -254,6 +256,9 @@ fn run(options: Options) -> Result<(), Box<dyn Error>> {
+ 
+     let runtime_limit = options.runtime_limit();
+     let output_configuration = RuntimeOutputConfiguration::from_options(&options);
++    // Read user spawn shortcuts once here so no key event ever performs file
++    // I/O on the input path.
++    keybinds::initialize();
+ 
+     let (mut session, session_notifier) = LibSeatSession::new()?;
+     if !session.is_active() {
+@@ -275,6 +280,10 @@ fn run(options: Options) -> Result<(), Box<dyn Error>> {
+     if !drm.is_atomic() {
+         return Err("the selected DRM device does not expose atomic modesetting".into());
+     }
++    // Take ownership of the CRTCs before the first atlas commit: a predecessor
++    // on this device can leave a cursor or overlay plane latched, and the
++    // kernel would scan it out above every Denial frame for the whole session.
++    kms_state::release_inherited_planes(&drm);
+     let mut kms = KmsContext::new(drm);
+     let mut frame_event_loop = if runtime_limit != RuntimeLimit::TestOnly {
+         let event_loop = EventLoop::<RuntimeState>::try_new()?;
+@@ -320,6 +329,9 @@ fn run(options: Options) -> Result<(), Box<dyn Error>> {
+             Signals::new(&[
+                 Signal::SIGINT,
+                 Signal::SIGTERM,
++                // Registered so the default terminate action cannot reach the
++                // compositor: an unhandled SIGHUP would kill the session.
++                Signal::SIGHUP,
+                 #[cfg(feature = "flutter")]
+                 Signal::SIGUSR1,
+                 #[cfg(feature = "flutter")]
+@@ -329,6 +341,12 @@ fn run(options: Options) -> Result<(), Box<dyn Error>> {
+                 let reason = match event.signal() {
+                     Signal::SIGINT => ShutdownReason::Interrupt,
+                     Signal::SIGTERM => ShutdownReason::Terminate,
++                    // Delivered through the event loop, not a signal handler,
++                    // so ordinary file I/O is safe here.
++                    Signal::SIGHUP => {
++                        keybinds::reload();
++                        return;
++                    }
+                     #[cfg(feature = "flutter")]
+                     Signal::SIGUSR1 => {
+                         state.flutter_reload_requested = true;
+@@ -975,6 +993,8 @@ struct RuntimeState {
+     #[cfg(feature = "flutter")]
+     pending_shell_actions: VecDeque<(wire::ShellAction, Option<i64>)>,
+     #[cfg(feature = "flutter")]
++    pending_spawn_commands: VecDeque<usize>,
++    #[cfg(feature = "flutter")]
+     published_window_ids: HashSet<u64>,
+     #[cfg(feature = "flutter")]
+     notification_server: Option<NotificationServer>,
+@@ -1004,6 +1024,21 @@ impl RuntimeState {
+                 .is_some_and(|authentication| authentication.locked())
+     }
+ 
++    #[cfg(feature = "flutter")]
++    fn queue_spawn_command(&mut self, index: usize) {
++        // Matches the shell-action bound. A user holding a chord through a
++        // stalled frame must not be able to queue unbounded process launches.
++        const MAX_PENDING_SPAWN_COMMANDS: usize = 8;
++        if self.pending_spawn_commands.len() < MAX_PENDING_SPAWN_COMMANDS {
++            self.pending_spawn_commands.push_back(index);
++        } else {
++            warn!(
++                limit = MAX_PENDING_SPAWN_COMMANDS,
++                "dropping excess spawn shortcut"
++            );
++        }
++    }
++
+     fn queue_shell_action(&mut self, action: wire::ShellAction, monitor_id: Option<i64>) {
+         const MAX_PENDING_SHELL_ACTIONS: usize = 64;
+         if self.pending_shell_actions.len() < MAX_PENDING_SHELL_ACTIONS {
+@@ -3173,11 +3208,24 @@ fn synchronize_flutter_window_management(
+ ) -> Result<(), Box<dyn Error>> {
+     if events.secure_session_locked() {
+         events.pending_shell_actions.clear();
++        // A spawn press that arrived before the lock must not start a process
++        // behind the lock screen.
++        events.pending_spawn_commands.clear();
+         runtime.drain_window_commands().for_each(drop);
+     } else {
+         while let Some((action, monitor_id)) = events.pending_shell_actions.pop_front() {
+             runtime.send_shell_action(action, monitor_id)?;
+         }
++        while let Some(index) = events.pending_spawn_commands.pop_front() {
++            // A reload between press and drain can retire the binding.
++            let Some(command) = keybinds::command_at(index) else {
++                continue;
++            };
++            // A command that fails to start is not a compositor failure.
++            if let Err(error) = runtime.launch_shortcut_command(&command) {
++                warn!(command = command[0], "spawn shortcut failed: {error}");
++            }
++        }
+         wayland_frontend::apply_window_commands(events, runtime.drain_window_commands());
+     }
+     if events.pending_window_events.is_empty() {
+diff --git a/compositor/src/bin/deniald/flutter_runtime.rs b/compositor/src/bin/deniald/flutter_runtime.rs
+index cc91450..d8d4166 100644
+--- a/compositor/src/bin/deniald/flutter_runtime.rs
++++ b/compositor/src/bin/deniald/flutter_runtime.rs
+@@ -4278,6 +4278,13 @@ impl FlutterRuntime {
+         self.system_commands.take_logout_requested()
+     }
+ 
++    pub fn launch_shortcut_command(
++        &self,
++        arguments: &[String],
++    ) -> Result<(), system_command::DispatchError> {
++        self.system_commands.launch_shortcut_command(arguments)
++    }
++
+     pub fn take_idle_dpms_timeout(&mut self) -> Option<Option<Duration>> {
+         self.pending_idle_dpms_timeout.take()
+     }
+diff --git a/compositor/src/bin/deniald/flutter_runtime/system_command.rs b/compositor/src/bin/deniald/flutter_runtime/system_command.rs
+index 43bd022..be17f5a 100644
+--- a/compositor/src/bin/deniald/flutter_runtime/system_command.rs
++++ b/compositor/src/bin/deniald/flutter_runtime/system_command.rs
+@@ -245,6 +245,31 @@ impl SystemCommandHandler {
+         Ok(())
+     }
+ 
++    /// Launch a command bound to a user spawn shortcut.
++    ///
++    /// Applications started this way are indistinguishable from ones the
++    /// Flutter shell launches: same environment scrubbing, process group, and
++    /// child reaping.
++    pub fn launch_shortcut_command(&self, arguments: &[String]) -> Result<(), DispatchError> {
++        if arguments.is_empty() {
++            return Ok(());
++        }
++        let display = self
++            .wayland_display
++            .as_deref()
++            .ok_or(DispatchError::WaylandUnavailable)?;
++        let executable = arguments[0].clone();
++        let pid = launch_application(
++            arguments,
++            None,
++            display,
++            self.x11_display.as_deref(),
++            self.output_control_socket.as_deref(),
++        )?;
++        info!(pid, executable, "launched a spawn shortcut");
++        Ok(())
++    }
++
+     pub fn take_logout_requested(&mut self) -> bool {
+         std::mem::take(&mut self.logout_requested)
+     }
+diff --git a/compositor/src/bin/deniald/keybinds.rs b/compositor/src/bin/deniald/keybinds.rs
+new file mode 100644
+index 0000000..f987445
+--- /dev/null
++++ b/compositor/src/bin/deniald/keybinds.rs
+@@ -0,0 +1,357 @@
++//! User-defined spawn shortcuts.
++//!
++//! Denial's window-management shortcuts are compiled in and deliberately fixed:
++//! they are part of the shell contract and are dispatched to Flutter. This
++//! module adds a strictly separate table of `Super`-chorded bindings that
++//! launch a process instead, so a user can bind a launcher or a terminal
++//! without the compositor growing a general-purpose input rebinding layer.
++//!
++//! Bindings are read once at startup from `$XDG_CONFIG_HOME/denial/keybinds.conf`
++//! (falling back to `$HOME/.config`). A missing file is the normal case and is
++//! not an error. Malformed lines are reported and skipped: a typo must never
++//! cost the user a session.
++//!
++//! ```text
++//! # Denial spawn shortcuts
++//! Super+Space  = /usr/bin/anchovy
++//! Super+Return = alacritty
++//! Super+Shift+E = thunar --new-window
++//! ```
++
++use std::path::PathBuf;
++use std::sync::{PoisonError, RwLock};
++
++use tracing::{info, warn};
++
++/// Keys that already carry a compiled-in window-management action. A user
++/// binding on one of these would never be reached, so it is refused loudly
++/// rather than silently ignored.
++const RESERVED_KEYCODES: &[(u32, &str)] = &[
++    (1, "Escape"),
++    (15, "Tab"),
++    (30, "A"),
++    (33, "F"),
++    (37, "K"),
++    (38, "L"),
++    (47, "V"),
++    (50, "M"),
++    (103, "Up"),
++];
++
++const MAX_BINDINGS: usize = 64;
++
++static BINDINGS: RwLock<Vec<SpawnBinding>> = RwLock::new(Vec::new());
++
++#[derive(Debug, Clone, Eq, PartialEq)]
++struct SpawnBinding {
++    keycode: u32,
++    /// Whether the chord requires Shift. Matching is exact in both directions,
++    /// so `Super+E` does not fire while Shift is held and `Super+Shift+E` does
++    /// not fire without it.
++    shift: bool,
++    command: Vec<String>,
++}
++
++/// Load the binding table during startup, so no key event performs file I/O on
++/// the input path.
++pub(super) fn initialize() {
++    store(read_configuration());
++}
++
++/// Re-read the configuration in place, for SIGHUP.
++///
++/// A file that has become unreadable or entirely malformed yields an empty
++/// table, which is reported rather than silently retaining stale bindings: the
++/// user asked for what is on disk now.
++pub(super) fn reload() {
++    let bindings = read_configuration();
++    info!(count = bindings.len(), "reloaded spawn shortcuts");
++    store(bindings);
++}
++
++/// Whether any binding uses this key, regardless of its modifiers.
++pub(super) fn is_bound(evdev_keycode: u32) -> bool {
++    read()
++        .iter()
++        .any(|binding| binding.keycode == evdev_keycode)
++}
++
++/// Index of the binding matching this key and Shift state exactly.
++pub(super) fn index_of(evdev_keycode: u32, shift: bool) -> Option<usize> {
++    read()
++        .iter()
++        .position(|binding| binding.keycode == evdev_keycode && binding.shift == shift)
++}
++
++/// The command at this index, cloned so the lock is not held across a fork.
++pub(super) fn command_at(index: usize) -> Option<Vec<String>> {
++    read().get(index).map(|binding| binding.command.clone())
++}
++
++/// Read the table, recovering from poisoning rather than panicking: a stale
++/// binding list is always better than killing the compositor from the input
++/// path.
++fn read() -> impl std::ops::Deref<Target = Vec<SpawnBinding>> {
++    BINDINGS.read().unwrap_or_else(PoisonError::into_inner)
++}
++
++fn store(bindings: Vec<SpawnBinding>) {
++    *BINDINGS.write().unwrap_or_else(PoisonError::into_inner) = bindings;
++}
++
++fn read_configuration() -> Vec<SpawnBinding> {
++    match configuration_path() {
++        Some(path) => load_from(&path),
++        None => {
++            warn!("neither XDG_CONFIG_HOME nor HOME is set; spawn shortcuts are disabled");
++            Vec::new()
++        }
++    }
++}
++
++fn configuration_path() -> Option<PathBuf> {
++    if let Some(config_home) = std::env::var_os("XDG_CONFIG_HOME")
++        && !config_home.is_empty()
++    {
++        return Some(PathBuf::from(config_home).join("denial/keybinds.conf"));
++    }
++    let home = std::env::var_os("HOME")?;
++    if home.is_empty() {
++        return None;
++    }
++    Some(PathBuf::from(home).join(".config/denial/keybinds.conf"))
++}
++
++fn load_from(path: &PathBuf) -> Vec<SpawnBinding> {
++    let contents = match std::fs::read_to_string(path) {
++        Ok(contents) => contents,
++        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
++        Err(error) => {
++            warn!(path = %path.display(), "could not read spawn shortcuts: {error}");
++            return Vec::new();
++        }
++    };
++
++    let mut bindings: Vec<SpawnBinding> = Vec::new();
++    for (index, line) in contents.lines().enumerate() {
++        let number = index + 1;
++        let line = line.trim();
++        if line.is_empty() || line.starts_with('#') {
++            continue;
++        }
++        let binding = match parse_line(line) {
++            Ok(binding) => binding,
++            Err(error) => {
++                warn!(path = %path.display(), line = number, "ignoring spawn shortcut: {error}");
++                continue;
++            }
++        };
++        if bindings.len() >= MAX_BINDINGS {
++            warn!(
++                path = %path.display(),
++                line = number,
++                limit = MAX_BINDINGS,
++                "ignoring spawn shortcut beyond the binding limit"
++            );
++            continue;
++        }
++        // Later duplicates would be unreachable, so report instead of shadowing.
++        if let Some(existing) = bindings
++            .iter()
++            .find(|existing| existing.keycode == binding.keycode && existing.shift == binding.shift)
++        {
++            warn!(
++                path = %path.display(),
++                line = number,
++                bound_to = existing.command[0],
++                "ignoring spawn shortcut that repeats an earlier chord"
++            );
++            continue;
++        }
++        bindings.push(binding);
++    }
++
++    if !bindings.is_empty() {
++        info!(count = bindings.len(), path = %path.display(), "loaded spawn shortcuts");
++    }
++    bindings
++}
++
++fn parse_line(line: &str) -> Result<SpawnBinding, String> {
++    let (chord, command) = line
++        .split_once('=')
++        .ok_or_else(|| format!("expected `Chord = command`, got `{line}`"))?;
++
++    let command: Vec<String> = command.split_whitespace().map(str::to_owned).collect();
++    if command.is_empty() {
++        return Err("binding has no command".to_owned());
++    }
++
++    let mut super_seen = false;
++    let mut shift = false;
++    let mut key = None;
++    for token in chord.split('+') {
++        let token = token.trim();
++        if token.is_empty() {
++            return Err(format!("chord `{}` has an empty component", chord.trim()));
++        }
++        match token.to_ascii_lowercase().as_str() {
++            "super" | "meta" | "logo" => super_seen = true,
++            "shift" => shift = true,
++            _ => {
++                if key.replace(token).is_some() {
++                    return Err(format!("chord `{}` names more than one key", chord.trim()));
++                }
++            }
++        }
++    }
++
++    // Every compiled-in shortcut is Super-chorded, and the state machine only
++    // consults this table while Super is held. A binding without it could never
++    // fire, so refuse it at parse time instead of at the keyboard.
++    if !super_seen {
++        return Err(format!("chord `{}` must include Super", chord.trim()));
++    }
++    let key = key.ok_or_else(|| format!("chord `{}` names no key", chord.trim()))?;
++    let keycode =
++        keycode_for_name(key).ok_or_else(|| format!("unknown key name `{key}` in chord"))?;
++    if let Some((_, name)) = RESERVED_KEYCODES
++        .iter()
++        .find(|(reserved, _)| *reserved == keycode)
++    {
++        return Err(format!(
++            "Super+{name} is a built-in window-management shortcut and cannot be rebound"
++        ));
++    }
++
++    Ok(SpawnBinding {
++        keycode,
++        shift,
++        command,
++    })
++}
++
++/// Map a configuration key name to its Linux evdev keycode.
++///
++/// Names are positional, matching how the compositor reads hardware: they
++/// follow the US layout's legends regardless of the active XKB layout, exactly
++/// like the compiled-in shortcuts.
++fn keycode_for_name(name: &str) -> Option<u32> {
++    let lowered = name.to_ascii_lowercase();
++    let named = match lowered.as_str() {
++        "escape" | "esc" => 1,
++        "minus" => 12,
++        "equal" => 13,
++        "backspace" => 14,
++        "tab" => 15,
++        "leftbracket" => 26,
++        "rightbracket" => 27,
++        "return" | "enter" => 28,
++        "semicolon" => 39,
++        "apostrophe" => 40,
++        "grave" => 41,
++        "backslash" => 43,
++        "comma" => 51,
++        "period" | "dot" => 52,
++        "slash" => 53,
++        "space" => 57,
++        "home" => 102,
++        "up" => 103,
++        "pageup" => 104,
++        "left" => 105,
++        "right" => 106,
++        "end" => 107,
++        "down" => 108,
++        "pagedown" => 109,
++        "insert" => 110,
++        "delete" => 111,
++        _ => 0,
++    };
++    if named != 0 {
++        return Some(named);
++    }
++
++    if let Some(number) = lowered.strip_prefix('f')
++        && let Ok(index) = number.parse::<u32>()
++    {
++        return match index {
++            1..=10 => Some(58 + index),
++            11 => Some(87),
++            12 => Some(88),
++            _ => None,
++        };
++    }
++
++    let mut characters = lowered.chars();
++    let single = characters.next()?;
++    if characters.next().is_some() {
++        return None;
++    }
++    match single {
++        'a'..='z' => {
++            const LETTER_ROWS: [&str; 3] = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
++            const ROW_FIRST_KEYCODE: [u32; 3] = [16, 30, 44];
++            LETTER_ROWS.iter().enumerate().find_map(|(row, letters)| {
++                letters
++                    .find(single)
++                    .map(|column| ROW_FIRST_KEYCODE[row] + u32::try_from(column).unwrap_or(0))
++            })
++        }
++        // The digit row runs 1..9 then 0, which is not the ASCII order.
++        '1'..='9' => Some(u32::from(single as u8 - b'1') + 2),
++        '0' => Some(11),
++        _ => None,
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn parses_a_plain_super_binding() {
++        let binding = parse_line("Super+Space = /usr/bin/anchovy").expect("binding parses");
++        assert_eq!(binding.keycode, 57);
++        assert!(!binding.shift);
++        assert_eq!(binding.command, vec!["/usr/bin/anchovy".to_owned()]);
++    }
++
++    #[test]
++    fn keeps_command_arguments_and_accepts_modifier_aliases() {
++        let binding = parse_line("meta + shift + e = thunar --new-window").expect("binding parses");
++        assert_eq!(binding.keycode, 18);
++        assert!(binding.shift);
++        assert_eq!(
++            binding.command,
++            vec!["thunar".to_owned(), "--new-window".to_owned()]
++        );
++    }
++
++    #[test]
++    fn maps_letter_rows_and_the_digit_row_positionally() {
++        assert_eq!(keycode_for_name("q"), Some(16));
++        assert_eq!(keycode_for_name("p"), Some(25));
++        assert_eq!(keycode_for_name("a"), Some(30));
++        assert_eq!(keycode_for_name("z"), Some(44));
++        assert_eq!(keycode_for_name("m"), Some(50));
++        assert_eq!(keycode_for_name("1"), Some(2));
++        assert_eq!(keycode_for_name("9"), Some(10));
++        assert_eq!(keycode_for_name("0"), Some(11));
++        assert_eq!(keycode_for_name("F1"), Some(59));
++        assert_eq!(keycode_for_name("f10"), Some(68));
++        assert_eq!(keycode_for_name("f11"), Some(87));
++        assert_eq!(keycode_for_name("f12"), Some(88));
++        assert_eq!(keycode_for_name("f13"), None);
++        assert_eq!(keycode_for_name("nonsense"), None);
++    }
++
++    #[test]
++    fn refuses_bindings_that_could_never_fire() {
++        assert!(parse_line("Ctrl+Space = anchovy").is_err());
++        assert!(parse_line("Super+K = anchovy").is_err());
++        assert!(parse_line("Super+Space =").is_err());
++        assert!(parse_line("Super+Nope = anchovy").is_err());
++        assert!(parse_line("Super+A+B = anchovy").is_err());
++        assert!(parse_line("no equals sign").is_err());
++    }
++}
+diff --git a/compositor/src/bin/deniald/kms_state.rs b/compositor/src/bin/deniald/kms_state.rs
+index 17e53b7..0d37472 100644
+--- a/compositor/src/bin/deniald/kms_state.rs
++++ b/compositor/src/bin/deniald/kms_state.rs
+@@ -1340,6 +1340,107 @@ where
+     Ok(None)
+ }
+ 
++/// Release planes the previous DRM master left latched on this device.
++///
++/// Denial draws its pointer inside the Flutter scene and never programs a
++/// hardware cursor plane. A predecessor on the same device - the
++/// `kwin_wayland` SDDM greeter, for example - leaves its own cursor bound to
++/// that plane when it exits, and the kernel keeps scanning the plane out above
++/// the Denial atlas for the rest of the session. The image is not part of the
++/// scene graph, so no repaint, client teardown, or Xwayland exit can clear it.
++/// Overlay planes are inherited the same way. Drop every non-primary plane
++/// that still holds a framebuffer; the atlas owns the primary planes and
++/// programs them itself.
++///
++/// A driver that refuses the commit only leaves the stale image on screen, so
++/// this never fails session startup.
++pub(super) fn release_inherited_planes(drm: &DrmDevice) {
++    let request = match inherited_plane_request(drm) {
++        Ok(Some(request)) => request,
++        Ok(None) => return,
++        Err(error) => {
++            warn!("could not inspect planes inherited from the previous DRM master: {error}");
++            return;
++        }
++    };
++
++    // Validate before committing, matching the teardown path's handling of
++    // driver-specific atomic rejections.
++    if let Err(error) = drm.atomic_commit(
++        AtomicCommitFlags::ALLOW_MODESET | AtomicCommitFlags::TEST_ONLY,
++        request.request.clone(),
++    ) {
++        warn!(
++            planes = ?request.planes,
++            "inherited plane release rejected by TEST_ONLY: {error}"
++        );
++        return;
++    }
++    if let Err(error) = drm.atomic_commit(AtomicCommitFlags::ALLOW_MODESET, request.request) {
++        warn!(planes = ?request.planes, "inherited plane release failed: {error}");
++        return;
++    }
++    info!(
++        planes = ?request.planes,
++        "released planes inherited from the previous DRM master"
++    );
++}
++
++struct InheritedPlaneRequest {
++    request: AtomicModeReq,
++    planes: Vec<u32>,
++}
++
++fn inherited_plane_request(
++    drm: &DrmDevice,
++) -> Result<Option<InheritedPlaneRequest>, Box<dyn Error>> {
++    const DRM_PLANE_TYPE_PRIMARY: property::RawValue = 1;
++
++    let mut request = AtomicModeReq::new();
++    let mut planes = Vec::new();
++    for plane in drm.plane_handles()? {
++        let properties: Vec<(property::Handle, property::RawValue)> =
++            drm.get_properties(plane)?.into_iter().collect();
++
++        // A plane without a readable type is left alone rather than guessed at.
++        let Some(type_property) = optional_named_property(drm, plane, "type")? else {
++            continue;
++        };
++        let Some(plane_type) = property_value(&properties, type_property) else {
++            continue;
++        };
++        if plane_type == DRM_PLANE_TYPE_PRIMARY {
++            continue;
++        }
++
++        let Some(framebuffer_property) = optional_named_property(drm, plane, "FB_ID")? else {
++            continue;
++        };
++        // An unbound plane already scans out nothing.
++        if property_value(&properties, framebuffer_property).unwrap_or(0) == 0 {
++            continue;
++        }
++        let Some(crtc_property) = optional_named_property(drm, plane, "CRTC_ID")? else {
++            continue;
++        };
++
++        request.add_raw_property(plane.into(), framebuffer_property, 0);
++        request.add_raw_property(plane.into(), crtc_property, 0);
++        planes.push(u32::from(plane));
++    }
++
++    Ok((!planes.is_empty()).then_some(InheritedPlaneRequest { request, planes }))
++}
++
++fn property_value(
++    properties: &[(property::Handle, property::RawValue)],
++    wanted: property::Handle,
++) -> Option<property::RawValue> {
++    properties
++        .iter()
++        .find_map(|(handle, value)| (*handle == wanted).then_some(*value))
++}
++
+ fn original_plane_state(
+     scanout: &Scanout,
+     framebuffer: framebuffer::Handle,
+diff --git a/compositor/src/bin/deniald/native_shortcut.rs b/compositor/src/bin/deniald/native_shortcut.rs
+index 6c6bc29..f6bd5f9 100644
+--- a/compositor/src/bin/deniald/native_shortcut.rs
++++ b/compositor/src/bin/deniald/native_shortcut.rs
+@@ -1,5 +1,7 @@
+ //! Native compositor shortcuts evaluated before any shell or client routing.
+ 
++use super::keybinds;
++
+ const KEY_ESCAPE: u32 = 1;
+ const KEY_BACKSPACE: u32 = 14;
+ const KEY_TAB: u32 = 15;
+@@ -44,6 +46,8 @@ pub(super) enum ShortcutDisposition {
+     Consume,
+     RequestShutdown,
+     RequestApplications,
++    /// Launch the user command bound at this index in [`keybinds::bindings`].
++    RequestSpawn(usize),
+     RequestOverview,
+     RequestToggleVerticalMaximize,
+     RequestWindowSwitcherNext,
+@@ -73,9 +77,23 @@ pub(super) struct NativeEscapeShortcut {
+     captured_logo_actions: u16,
+     captured_media_actions: u8,
+     captured_backspace: bool,
++    /// Keycodes of user spawn chords captured on press. Built-in actions own a
++    /// compile-time bit in `captured_logo_actions`; user bindings have no fixed
++    /// bit, so their press/release pairing is tracked by keycode instead. The
++    /// binding limit keeps this to a handful of entries, so a linear scan beats
++    /// a hashed set on the input path.
++    captured_spawn_keys: Vec<u32>,
+ }
+ 
+ impl NativeEscapeShortcut {
++    /// Index of the user binding matching this key and the modifiers held now.
++    ///
++    /// Shift is matched exactly in both directions: `Super+E` does not fire
++    /// while Shift is held, and `Super+Shift+E` does not fire without it.
++    fn spawn_binding_index(&self, evdev_keycode: u32) -> Option<usize> {
++        keybinds::index_of(evdev_keycode, self.shift_keys != 0)
++    }
++
+     /// Observe a Linux evdev keycode before it enters Smithay's seat state.
+     pub(super) fn observe(&mut self, evdev_keycode: u32, pressed: bool) -> ShortcutDisposition {
+         let logo_modifier = match evdev_keycode {
+@@ -222,6 +240,40 @@ impl NativeEscapeShortcut {
+             return ShortcutDisposition::Forward;
+         }
+ 
++        // User spawn bindings are consulted only after every built-in action,
++        // so a compiled-in shortcut can never be shadowed by configuration.
++        // Entry is keyed on the bare keycode, not the full chord: Shift may be
++        // released before the key, and a release that missed this block would
++        // leave the chord latched into the next press.
++        if keybinds::is_bound(evdev_keycode) {
++            if pressed {
++                // Key repeat must not launch a process per repeat.
++                if self.captured_spawn_keys.contains(&evdev_keycode) {
++                    return ShortcutDisposition::Consume;
++                }
++                if self.logo_keys == 0 {
++                    return ShortcutDisposition::Forward;
++                }
++                let Some(index) = self.spawn_binding_index(evdev_keycode) else {
++                    // The key is bound, but not for the modifiers held now.
++                    return ShortcutDisposition::Forward;
++                };
++                self.captured_spawn_keys.push(evdev_keycode);
++                return ShortcutDisposition::RequestSpawn(index);
++            }
++            // Release the chord even if Super was lifted first, so the key does
++            // not stay latched into the next press.
++            if let Some(position) = self
++                .captured_spawn_keys
++                .iter()
++                .position(|captured| *captured == evdev_keycode)
++            {
++                self.captured_spawn_keys.swap_remove(position);
++                return ShortcutDisposition::Consume;
++            }
++            return ShortcutDisposition::Forward;
++        }
++
+         let modifier = match evdev_keycode {
+             KEY_LEFT_CTRL => Some((&mut self.ctrl_keys, LEFT_MODIFIER)),
+             KEY_RIGHT_CTRL => Some((&mut self.ctrl_keys, RIGHT_MODIFIER)),
+diff --git a/compositor/src/bin/deniald/wayland_frontend/input.rs b/compositor/src/bin/deniald/wayland_frontend/input.rs
+index 62bab26..a9af5ad 100644
+--- a/compositor/src/bin/deniald/wayland_frontend/input.rs
++++ b/compositor/src/bin/deniald/wayland_frontend/input.rs
+@@ -800,6 +800,11 @@ fn intercept_native_escape(
+             state.queue_shell_action(super::super::wire::ShellAction::Applications, None);
+             true
+         }
++        ShortcutDisposition::RequestSpawn(index) => {
++            #[cfg(feature = "flutter")]
++            state.queue_spawn_command(index);
++            true
++        }
+         ShortcutDisposition::RequestOverview => {
+             #[cfg(feature = "flutter")]
+             {
