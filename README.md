@@ -17,6 +17,7 @@ My CachyOS + **KDE Plasma** rice with Catppuccin Macchiato + Flamingo theme.
 - **backup** - Borg backup script
 - **eq-fix** - relink EverQuest Legends' MIDI music to the Beacn Game dial ([notes](AUDIO-FIXES.md))
 - **beacn-fix** - recover audio after swapping the Beacn Mic's aux plug, no reboot ([notes](AUDIO-FIXES.md))
+- **gnome-settings-save / -restore** - export & reload GNOME's dconf settings, since GNOME has no config files to stow ([notes](GNOME.md))
 
 ## Fresh install (after a wipe)
 

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Dump the GNOME dconf subtrees this repo tracks into gnome/dconf/.
+#
+# GNOME keeps almost nothing in files — it lives in dconf, a binary database —
+# so there is nothing for stow to symlink. This exports the settings worth
+# keeping as text, one file per subtree so git diffs stay readable.
+#
+# Deliberately NOT a dump of all of /org/gnome/: that also picks up Nautilus
+# window geometry, per-application notification history, and which settings
+# panel was open last. Those are session state, not configuration.
+#
+# Run after changing GNOME settings, then commit the result.
+set -euo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+OUT="$DOTFILES/gnome/dconf"
+
+PATHS=(
+  /org/gnome/shell/
+  /org/gnome/desktop/interface/
+  /org/gnome/desktop/wm/preferences/
+  /org/gnome/desktop/wm/keybindings/
+  /org/gnome/desktop/peripherals/
+  /org/gnome/mutter/
+  /org/gnome/settings-daemon/plugins/media-keys/
+  /org/gnome/nautilus/preferences/
+)
+
+command -v dconf >/dev/null 2>&1 || { echo "gnome-settings-save: dconf not found" >&2; exit 1; }
+mkdir -p "$OUT"
+
+for path in "${PATHS[@]}"; do
+  # Path components contain dashes (settings-daemon, media-keys), so the
+  # filename cannot be reversed back into a dconf path. Record it in a header
+  # comment instead and let the restore script read it back.
+  name="$(printf '%s' "${path#/org/gnome/}" | sed 's#/$##; s#/#.#g')"
+  file="$OUT/$name.ini"
+  {
+    printf '# dconf-path: %s\n' "$path"
+    dconf dump "$path"
+  } > "$file"
+  lines="$(grep -cv '^#' "$file" || true)"
+  printf '  %-34s %s lines\n' "$name.ini" "$lines"
+done
+
+echo "Saved to $OUT"

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Load the tracked GNOME dconf settings back into the running session.
+#
+# The counterpart to gnome-settings-save. Each .ini carries its target dconf
+# path in a header comment, since filenames cannot be reversed back into paths
+# (settings-daemon and media-keys contain dashes themselves).
+#
+# dconf load merges into the target path rather than wiping it, so settings not
+# present in the file are left alone.
+#
+# Pass --dry-run to see what would be loaded without changing anything.
+set -euo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+IN="$DOTFILES/gnome/dconf"
+dry_run=0
+[[ "${1:-}" == "--dry-run" ]] && dry_run=1
+
+command -v dconf >/dev/null 2>&1 || { echo "gnome-settings-restore: dconf not found" >&2; exit 1; }
+[[ -d "$IN" ]] || { echo "gnome-settings-restore: no dump at $IN" >&2; exit 1; }
+
+shopt -s nullglob
+files=("$IN"/*.ini)
+[[ ${#files[@]} -gt 0 ]] || { echo "gnome-settings-restore: $IN is empty" >&2; exit 1; }
+
+for file in "${files[@]}"; do
+  path="$(sed -n 's/^# dconf-path: //p' "$file" | head -1)"
+  if [[ -z "$path" ]]; then
+    echo "  skipping $(basename "$file"): no '# dconf-path:' header" >&2
+    continue
+  fi
+  # An .ini holding only the header would be a no-op; say so rather than
+  # implying something was applied.
+  if ! grep -qv '^#' "$file" 2>/dev/null || [[ -z "$(grep -v '^#' "$file" | tr -d '[:space:]')" ]]; then
+    printf '  %-34s (empty, nothing to load)\n' "$(basename "$file")"
+    continue
+  fi
+  if (( dry_run )); then
+    printf '  would load %-24s -> %s\n' "$(basename "$file")" "$path"
+  else
+    dconf load "$path" < "$file"
+    printf '  %-34s -> %s\n' "$(basename "$file")" "$path"
+  fi
+done
+
+if (( dry_run )); then
+  echo "Dry run — nothing changed."
+else
+  echo "Loaded. Some changes (extensions, shell layout) need a logout to take effect."
+fi
