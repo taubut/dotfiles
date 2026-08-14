@@ -22,6 +22,7 @@ cd "$DOTFILES"
 STOW_PACKAGES=(
     kde
     autostart
+    beacn
     fluidsynth
     scripts
     shell

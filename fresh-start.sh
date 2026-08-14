@@ -123,7 +123,7 @@ s2_configs() {
   [ -f "$NAS/keys/gnupg.tar.gz" ] && { tar xzf "$NAS/keys/gnupg.tar.gz" -C "$HOME"; chmod 700 ~/.gnupg 2>/dev/null; ok "gnupg keys"; }
   # dotfile configs via stow (symlinks the tracked ones)
   if command -v stow >/dev/null 2>&1; then
-    for pkg in kde autostart fluidsynth scripts shell terminal browser fetch input-remapper launcher music newsboat wallust yazi yt-dlp mako sway waybar wlogout; do
+    for pkg in kde autostart beacn fluidsynth scripts shell terminal browser fetch input-remapper launcher music newsboat wallust yazi yt-dlp mako sway waybar wlogout; do
       [ -d "$DOTFILES/$pkg" ] && stow -R "$pkg" 2>/dev/null
     done
     ok "dotfiles stowed"

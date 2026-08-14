@@ -4,3 +4,7 @@ Name=Beacn Utility
 Comment=A Tool for Configuring Beacn Devices
 Exec="/usr/bin/beacn-utility" --startup
 Terminal=false
+# Superseded by ~/.config/systemd/user/beacn-utility.service, which orders this
+# after pipeweaver.service. Hidden=true tells XDG autostart to skip the entry so
+# the utility is not launched twice.
+Hidden=true

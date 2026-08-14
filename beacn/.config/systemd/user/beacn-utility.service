@@ -1,0 +1,23 @@
+[Unit]
+Description=Beacn Utility
+# Replaces the XDG autostart entry, which gave no ordering guarantee against
+# pipeweaver-daemon. beacn-utility probes PipeWeaver once at startup and caches
+# the failure without retrying, so losing that race leaves the Mix Create stuck
+# on "failed to connect to pipeweaver" for the whole session.
+PartOf=graphical-session.target
+After=graphical-session.target pipeweaver.service
+Wants=pipeweaver.service
+
+[Service]
+Type=simple
+# systemd's After= only orders process *start*, not readiness. Wait (up to 30s)
+# for the daemon's control port to accept connections before launching the
+# utility. Same shape as the fluidsynth pipeweaver_game guard, and non-fatal for
+# the same reason: start anyway rather than leave the tray icon missing.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do /usr/bin/ss -tln 2>/dev/null | grep -q ":14565 " && exit 0; sleep 1; done; exit 0'
+ExecStart=/usr/bin/beacn-utility --startup
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

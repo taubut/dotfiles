@@ -1,0 +1,19 @@
+[Unit]
+Description=PipeWeaver audio daemon
+Documentation=https://github.com/FrostyCoolSlug/pipeweaver
+# PipeWeaver builds its virtual sinks on top of PipeWire, so it must not start
+# until PipeWire is up. Tied to the graphical session rather than the login
+# session: the daemon is only useful while a desktop is running, and this way
+# it stops cleanly on logout instead of lingering across sessions.
+PartOf=graphical-session.target
+After=graphical-session.target pipewire.service pipewire-pulse.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pipeweaver-daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
