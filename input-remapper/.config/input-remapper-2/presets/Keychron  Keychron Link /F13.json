@@ -8,7 +8,7 @@
             }
         ],
         "target_uinput": "keyboard",
-        "output_symbol": "KEY_F14",
+        "output_symbol": "KEY_F13",
         "name": "`",
         "mapping_type": "key_macro"
     }
