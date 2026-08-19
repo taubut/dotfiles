@@ -1,9 +1,61 @@
 #!/bin/bash
-# Clean compositor-aware logout
-if [ -n "$SWAYSOCK" ] && command -v swaymsg >/dev/null; then
-    swaymsg exit
-elif [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && command -v hyprctl >/dev/null; then
-    hyprctl dispatch exit
-else
-    loginctl terminate-user "$USER"
+# Clean, desktop-aware logout.
+#
+#   session-logout            log out of the current session
+#   session-logout --dry-run  print what would run, change nothing
+#
+# Never calls `loginctl terminate-user`: that kills every process this user owns
+# across ALL sessions -- detached tmux included -- with no session teardown.
+# The last-resort branch below is scoped to the current session only.
+
+set -u
+
+DRY=0
+case "${1:-}" in
+    -n|--dry-run) DRY=1 ;;
+    -h|--help)    sed -n '2,9p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    "")           ;;
+    *)            echo "session-logout: unknown option $1" >&2; exit 2 ;;
+esac
+
+run() {
+    if [ "$DRY" -eq 1 ]; then
+        printf 'would run: %s\n' "$*"
+        exit 0
+    fi
+    exec "$@"
+}
+
+# Tiling compositors own their own exit path.
+if [ -n "${SWAYSOCK:-}" ] && command -v swaymsg >/dev/null 2>&1; then
+    run swaymsg exit
 fi
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && command -v hyprctl >/dev/null 2>&1; then
+    run hyprctl dispatch exit
+fi
+
+# Full desktops: ask the session manager to tear down gracefully, so it can run
+# its own shutdown hooks instead of having its processes shot out from under it.
+case "${XDG_CURRENT_DESKTOP:-}" in
+    *GNOME*)
+        if command -v gnome-session-quit >/dev/null 2>&1; then
+            run gnome-session-quit --logout --no-prompt
+        fi
+        ;;
+    *KDE*)
+        if command -v qdbus6 >/dev/null 2>&1; then
+            run qdbus6 org.kde.Shutdown /Shutdown org.kde.Shutdown.logout
+        fi
+        ;;
+esac
+
+# Last resort: close THIS session only. Still never the whole user.
+if [ -n "${XDG_SESSION_ID:-}" ]; then
+    printf 'session-logout: no method for XDG_CURRENT_DESKTOP=%s; closing session %s only\n' \
+        "${XDG_CURRENT_DESKTOP:-unset}" "$XDG_SESSION_ID" >&2
+    run loginctl terminate-session "$XDG_SESSION_ID"
+fi
+
+printf 'session-logout: could not determine how to log out (XDG_CURRENT_DESKTOP=%s)\n' \
+    "${XDG_CURRENT_DESKTOP:-unset}" >&2
+exit 1
