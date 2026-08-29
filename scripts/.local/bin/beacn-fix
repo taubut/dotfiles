@@ -14,7 +14,12 @@
 #   beacn-fix --dry-run        : print what each step would do, change nothing
 set -u
 
-MIC_SYS="/sys/bus/usb/devices/1-5"          # Beacn Mic (from diagnosis)
+# Beacn Mic (33ae:0001) - located by USB ID, since it moves when the port changes
+# (2026-08-28: port 1-5 stopped enumerating it, now on 1-7)
+MIC_SYS=""
+for d in /sys/bus/usb/devices/*; do
+  [ -f "$d/idVendor" ] && [ "$(cat "$d/idVendor")" = "33ae" ] && [ "$(cat "$d/idProduct")" = "0001" ] && MIC_SYS="$d" && break
+done
 BEACN_UNIT="app-io.github.beacn_on_linux.beacn-utility@autostart.service"
 MODE="gentle"; DRY=0
 for a in "$@"; do case "$a" in
@@ -30,13 +35,13 @@ say "beacn-fix (${MODE}${DRY:+, dry-run})"
 
 # --- Tier 3 (optional): software replug of the Beacn Mic ----------------------
 if [ "$MODE" = "reset" ]; then
-  if [ -r "$MIC_SYS/busnum" ] && [ -r "$MIC_SYS/devnum" ]; then
+  if [ -n "$MIC_SYS" ] && [ -r "$MIC_SYS/busnum" ] && [ -r "$MIC_SYS/devnum" ]; then
     B=$(printf '%03d' "$(cat "$MIC_SYS/busnum")"); D=$(printf '%03d' "$(cat "$MIC_SYS/devnum")")
     say "• USB-resetting Beacn Mic at /dev/bus/usb/$B/$D (needs sudo)…"
     run "sudo usbreset /dev/bus/usb/$B/$D"
     run "sleep 2"
   else
-    say "• (couldn't read $MIC_SYS — skipping USB reset)"
+    say "• (Beacn Mic not found on USB — skipping USB reset; check the cable/port, it is not enumerated)"
   fi
 fi
 
