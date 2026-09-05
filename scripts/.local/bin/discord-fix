@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# discord-fix — fix Discord streams born muted (voice, or PTT/join/leave sounds).
+#
+# Discord plays audio on TWO separate PipeWire streams:
+#   "WEBRTC VoiceEngine" — voice chat
+#   "Chromium"           — UI/alert sounds (PTT beep, join/leave, ringtone)
+# WirePlumber persists per-stream mute in ~/.local/state/wireplumber/
+# stream-properties, so a stream muted once (Plasma applet, pavucontrol, stray
+# dial press) is reborn muted on every launch: "mic works but I hear nobody"
+# (VoiceEngine saved muted) or "voice fine but no PTT/join sounds" (Chromium
+# saved muted). The Chromium stream only lives for the half-second a sound
+# plays, so it can't be unmuted live — the saved state has to be edited with
+# WirePlumber STOPPED (it rewrites the file on shutdown).
+#
+# Usage:
+#   discord-fix          unmute live Discord streams; if the saved state still
+#                        holds a mute, stop WirePlumber, edit it, restart
+#                        (the restart only happens when actually needed)
+#   discord-fix --check  diagnose only, change nothing
+set -u
+
+STATE="$HOME/.local/state/wireplumber/stream-properties"
+# Saved-state keys Discord audio rides on. "Chromium" is shared with any
+# Chromium-family browser stream — unmuting it is the right call there too.
+SAVED_RE='^(Output/Audio:application\.name:(Chromium|WEBRTC\\sVoiceEngine)|Audio/Sink:node\.name:pipeweaver_discord)='
+
+CHECK=0
+for a in "$@"; do case "$a" in
+  --check|--dry-run) CHECK=1 ;;
+  -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+  *) echo "discord-fix: unknown arg '$a' (see --help)"; exit 2 ;;
+esac; done
+
+say(){ printf '%s\n' "$*"; }
+command -v pactl >/dev/null 2>&1 || { say "discord-fix: pactl not found"; exit 1; }
+
+TAG=""; [ "$CHECK" = 1 ] && TAG=" (check only)"
+say "discord-fix$TAG"
+
+# --- 1) live Discord playback streams -----------------------------------------
+found_live=0 fixed_live=0
+while IFS='|' read -r id mute bin app; do
+  [ -n "$id" ] || continue
+  case "$bin|$app" in
+    *[Dd]iscord*|*"WEBRTC VoiceEngine"*) ;;
+    *) continue ;;
+  esac
+  found_live=1
+  if [ "$mute" = "yes" ]; then
+    if [ "$CHECK" = 1 ]; then
+      say "  MUTED live stream #$id (${app:-?})"
+    else
+      pactl set-sink-input-mute "$id" 0 \
+        && { say "  unmuted live stream #$id (${app:-?})"; fixed_live=1; }
+    fi
+  else
+    say "  ok: live stream #$id (${app:-?}) unmuted"
+  fi
+done < <(pactl list sink-inputs 2>/dev/null | awk '
+  /^Sink Input #/ { if (id!="") print id"|"mute"|"bin"|"app
+                    id=substr($3,2); mute=""; bin=""; app="" }
+  /^\tMute:/                        { mute=$2 }
+  /application\.process\.binary =/  { v=$0; sub(/.*= /,"",v); gsub(/"/,"",v); bin=v }
+  /application\.name =/             { v=$0; sub(/.*= /,"",v); gsub(/"/,"",v); app=v }
+  END { if (id!="") print id"|"mute"|"bin"|"app }')
+[ "$found_live" = 0 ] && say "  (no live Discord streams — normal; alert streams only exist mid-sound)"
+
+# --- 2) the pipeweaver_discord channel sink itself ------------------------------
+smute=$(pactl get-sink-mute pipeweaver_discord 2>/dev/null | awk '{print $2}')
+if [ "$smute" = "yes" ]; then
+  if [ "$CHECK" = 1 ]; then say "  MUTED sink pipeweaver_discord"
+  else pactl set-sink-mute pipeweaver_discord 0 && say "  unmuted sink pipeweaver_discord"; fi
+elif [ -n "$smute" ]; then
+  say "  ok: sink pipeweaver_discord unmuted"
+else
+  say "  warning: sink pipeweaver_discord not found — is PipeWeaver running?"
+  say "           (that's a routing problem, not a mute problem — try beacn-fix)"
+fi
+
+# --- 3) saved per-stream state (the "reborn muted" part) ------------------------
+[ "$fixed_live" = 1 ] && sleep 2   # let WirePlumber persist the live unmutes
+
+if [ ! -f "$STATE" ]; then
+  say "  (no stream-properties state file — nothing saved to fix)"
+  exit 0
+fi
+
+saved_muted=$(grep -E "$SAVED_RE" "$STATE" | grep '"mute":true' || true)
+if [ -z "$saved_muted" ]; then
+  say "  ok: no Discord entries saved muted in stream-properties"
+  [ "$CHECK" = 1 ] && say "" && say "All clear."
+  exit 0
+fi
+
+say "  saved MUTED in stream-properties (these streams are reborn muted):"
+printf '%s\n' "$saved_muted" | sed 's/=.*//; s/^/    /'
+
+if [ "$CHECK" = 1 ]; then
+  say ""
+  say "Run plain 'discord-fix' to repair — restarts WirePlumber (~2s audio blip)."
+  exit 0
+fi
+
+say "• Stopping WirePlumber (it rewrites the state file on shutdown)…"
+systemctl --user stop wireplumber
+sed -i -E "\\#$SAVED_RE# s/\"mute\":true/\"mute\":false/" "$STATE"
+say "• Restarting WirePlumber…"
+systemctl --user start wireplumber
+for i in $(seq 1 15); do
+  pw-cli ls Node 2>/dev/null | grep -q pipeweaver_discord && break; sleep 1
+done
+if command -v eq-fix >/dev/null 2>&1; then
+  say "• Re-linking EQ music (eq-fix; the WirePlumber restart drops it)…"
+  eq-fix >/dev/null 2>&1 || true
+fi
+
+if grep -E "$SAVED_RE" "$STATE" | grep -q '"mute":true'; then
+  say "STILL saved muted — something rewrote the state file. Re-run discord-fix."
+  exit 1
+fi
+say ""
+say "Done. Test it: tap push-to-talk / hop in and out of a voice channel."

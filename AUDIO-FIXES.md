@@ -1,13 +1,13 @@
 # Audio fix scripts
 
-Two small recovery commands for my Beacn audio stack on CachyOS. Both live in
+Small recovery commands for my Beacn audio stack on CachyOS. They live in
 [`scripts/.local/bin/`](scripts/.local/bin/) and are stowed to `~/.local/bin`,
 so they're on `$PATH`.
 
 Background: my sound runs **PipeWire → PipeWeaver (Beacn) virtual sinks →
 Beacn Mic/Mix Create hardware**, and EverQuest's music is **MIDI** rendered by a
-`fluidsynth` user service. Two things break in annoying, reboot-tempting ways —
-these scripts fix each without a reboot.
+`fluidsynth` user service. A few things break in annoying, reboot-tempting
+ways — these scripts fix each without a reboot.
 
 ---
 
@@ -64,6 +64,40 @@ restarts WirePlumber (which re-probes and rebinds the devices) and then calls
 
 ---
 
+## `discord-fix` — Discord streams born muted (voice, or PTT/join/leave sounds)
+
+**Symptom:** either *"my mic works but I can't hear anyone"*, or *"voice chat
+is fine but the push-to-talk beep and join/leave sounds are silent"*.
+
+**Cause:** Discord plays audio on **two separate PipeWire streams** — voice
+rides `WEBRTC VoiceEngine`, while the UI/alert sounds (PTT beep, join/leave,
+ringtone) ride the Electron `Chromium` stream. WirePlumber persists per-stream
+mute in `~/.local/state/wireplumber/stream-properties`, so a stream that got
+muted once (Plasma volume applet, pavucontrol, a stray dial press) is **reborn
+muted on every launch**. Whichever of the two streams carries the saved mute
+picks which symptom you get. The `Chromium` stream only exists for the
+half-second a sound plays, so it can't be caught and unmuted live — the saved
+state has to be edited with WirePlumber stopped (it rewrites the file on
+shutdown, so edit-while-running gets clobbered).
+
+**Fix:**
+
+```bash
+discord-fix          # unmute live streams; edit saved state only if needed
+discord-fix --check  # diagnose only, change nothing
+```
+
+It unmutes any live Discord streams (and the `pipeweaver_discord` sink itself),
+then checks the saved state; only if a saved mute remains does it stop
+WirePlumber, flip the entry, and restart (≈2 s audio blip, then `eq-fix` to
+restore the music link the restart drops). Idempotent — safe to run anytime.
+
+Not this script's problem: Discord's own per-sound toggles (Settings →
+Notifications → Sounds) and Streamer Mode's "Disable Sounds", which kicks in
+when it thinks OBS is running.
+
+---
+
 ## PipeWeaver startup order — no script needed
 
 **Symptom:** the Beacn Utility opens but the Mix Create shows **"failed to
@@ -114,7 +148,8 @@ means that happened.
 
 ## Dependencies
 
-- **PipeWire** tools: `wpctl`, `pw-link`, `pw-cli` (package `pipewire`)
+- **PipeWire** tools: `wpctl`, `pw-link`, `pw-cli` (package `pipewire`) and
+  `pactl` (package `libpulse`; for `discord-fix`)
 - **fluidsynth** + a soundfont, running as the `fluidsynth` **user** service
   (for `eq-fix`)
 - **beacn-utility** + **pipeweaver** — the Beacn-on-Linux stack that provides the
