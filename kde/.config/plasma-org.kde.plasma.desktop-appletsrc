@@ -22,7 +22,7 @@ immutability=1
 plugin=plasmusic-toolbar
 
 [Containments][115][Applets][118][Configuration]
-popupHeight=466
+popupHeight=186
 popupWidth=300
 
 [Containments][115][Applets][118][Configuration][ConfigDialog]
@@ -82,8 +82,8 @@ immutability=1
 plugin=org.kde.plasma.weather
 
 [Containments][120][Applets][121][Configuration]
-popupHeight=364
-popupWidth=560
+popupHeight=37
+popupWidth=36
 
 [Containments][120][Applets][121][Configuration][Appearance]
 showHumidityInTooltip=false
