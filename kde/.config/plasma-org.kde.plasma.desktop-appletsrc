@@ -22,7 +22,7 @@ immutability=1
 plugin=plasmusic-toolbar
 
 [Containments][115][Applets][118][Configuration]
-popupHeight=466
+popupHeight=186
 popupWidth=300
 
 [Containments][115][Applets][118][Configuration][ConfigDialog]
@@ -219,6 +219,7 @@ SlidePaths=/usr/share/wallpapers/
 
 [Containments][45]
 ItemGeometries-1440x2560=
+ItemGeometries-2360x1640=
 ItemGeometries-2560x1440=
 ItemGeometries-640x480=
 ItemGeometriesHorizontal=
