@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""Wallpaper picker window - thumbnail grid with a search bar on top.
+
+Usage: wallpaper-picker-gui DIR
+Prints the picked wallpaper's path and exits 0; exits 1 if closed without picking.
+
+Type to filter by file name (every word must match), arrows to move,
+Enter or double-click to pick, Esc to clear the search (or close if it's empty).
+Colors come from the Nsxiv.* lines wallust writes to ~/.Xresources.
+Thumbnails are cached in ~/.cache/wallpaper-picker.
+"""
+import hashlib
+import os
+import re
+import sys
+from pathlib import Path
+
+from PyQt6.QtCore import QEvent, QObject, QRunnable, QSize, Qt, QThreadPool, pyqtSignal
+from PyQt6.QtGui import QColor, QIcon, QImage, QImageReader, QPainter, QPixmap
+from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit, QListView,
+                             QListWidget, QListWidgetItem, QVBoxLayout, QWidget)
+
+THUMB = QSize(240, 135)
+CELL_MIN_WIDTH = THUMB.width() + 20
+CELL_HEIGHT = THUMB.height() + 44
+CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "wallpaper-picker"
+NAV_KEYS = {Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right,
+            Qt.Key.Key_PageUp, Qt.Key.Key_PageDown}
+NAME_ROLE = Qt.ItemDataRole.UserRole
+
+
+def nsxiv_colors():
+    """Nsxiv colors from ~/.Xresources (wallust keeps them in sync with the wallpaper)."""
+    colors = {"window.background": "#13111A", "window.foreground": "#B1A1A6",
+              "bar.background": "#39333C"}
+    try:
+        for line in (Path.home() / ".Xresources").read_text().splitlines():
+            m = re.match(r"\s*Nsxiv\.([\w.]+):\s*(#[0-9A-Fa-f]{6})", line)
+            if m:
+                colors[m.group(1)] = m.group(2)
+    except OSError:
+        pass
+    return colors
+
+
+def load_thumb(path):
+    """Thumbnail for path, from the cache when the file hasn't changed since."""
+    st = path.stat()
+    key = hashlib.sha1(f"{path}|{st.st_mtime_ns}|{st.st_size}".encode()).hexdigest()
+    cached = CACHE_DIR / f"{key}.jpg"
+    if cached.exists():
+        img = QImage(str(cached))
+        if not img.isNull():
+            return img
+
+    reader = QImageReader(str(path))
+    reader.setAutoTransform(True)
+    size = reader.size()
+    if size.isValid():
+        reader.setScaledSize(size.scaled(THUMB, Qt.AspectRatioMode.KeepAspectRatio))
+    img = reader.read()
+    if img.isNull():
+        return img
+    if not size.isValid():
+        img = img.scaled(THUMB, Qt.AspectRatioMode.KeepAspectRatio,
+                         Qt.TransformationMode.SmoothTransformation)
+    img.save(str(cached), "JPG", 90)
+    return img
+
+
+def centered_icon(img):
+    """Icon the full thumbnail size with the image centered, so wide and tall images line up."""
+    canvas = QPixmap(THUMB)
+    canvas.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(canvas)
+    painter.drawImage((THUMB.width() - img.width()) // 2, (THUMB.height() - img.height()) // 2, img)
+    painter.end()
+    return QIcon(canvas)
+
+
+class ThumbSignals(QObject):
+    done = pyqtSignal(int, QImage)
+
+
+class ThumbJob(QRunnable):
+    def __init__(self, row, path, signals):
+        super().__init__()
+        self.row, self.path, self.signals = row, path, signals
+
+    def run(self):
+        try:
+            img = load_thumb(self.path)
+        except OSError:
+            return
+        if not img.isNull():
+            self.signals.done.emit(self.row, img)
+
+
+class Picker(QWidget):
+    def __init__(self, folder):
+        super().__init__()
+        self.picked = None
+        c = nsxiv_colors()
+        bg, fg, bar = c["window.background"], c["window.foreground"], c["bar.background"]
+
+        self.setWindowTitle("Wallpaper Picker")
+        self.resize(1320, 840)
+        self.setStyleSheet(f"""
+            QWidget {{ background: {bg}; color: {fg}; font-size: 10pt; }}
+            QLineEdit {{ background: {bar}; border: none; border-radius: 4px;
+                         padding: 7px 10px; font-size: 12pt; }}
+            QListWidget {{ border: none; }}
+            QListWidget::item {{ border: 2px solid transparent; border-radius: 4px; padding: 4px; }}
+            QListWidget::item:hover {{ background: {bar}; }}
+            QListWidget::item:selected {{ background: {bar}; border-color: {fg}; color: {fg}; }}
+            QScrollBar:vertical {{ background: {bg}; width: 10px; }}
+            QScrollBar::handle:vertical {{ background: {bar}; border-radius: 5px; min-height: 40px; }}
+            QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+            QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
+        """)
+
+        self.search = QLineEdit(placeholderText="Search wallpapers...")
+        self.search.textChanged.connect(self.apply_filter)
+        self.search.installEventFilter(self)
+        self.count = QLabel()
+
+        self.grid = QListWidget()
+        self.grid.setViewMode(QListView.ViewMode.IconMode)
+        self.grid.setIconSize(THUMB)
+        self.grid.setGridSize(QSize(CELL_MIN_WIDTH, CELL_HEIGHT))
+        self.grid.viewport().installEventFilter(self)
+        self.grid.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)  # width never jumps
+        self.grid.setResizeMode(QListView.ResizeMode.Adjust)
+        self.grid.setMovement(QListView.Movement.Static)
+        self.grid.setUniformItemSizes(True)
+        self.grid.setWordWrap(True)
+        self.grid.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # typing always goes to the search bar
+        self.grid.itemDoubleClicked.connect(self.pick)
+
+        top = QHBoxLayout()
+        top.addWidget(self.search, 1)
+        top.addWidget(self.count)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.addLayout(top)
+        layout.addWidget(self.grid, 1)
+
+        # Same files nsxiv would show: everything readable in the folder, not subfolders
+        files = sorted((p for p in folder.iterdir() if p.is_file() and QImageReader(str(p)).canRead()),
+                       key=lambda p: p.name.lower())
+        placeholder = QPixmap(THUMB)
+        placeholder.fill(QColor(bar))
+        for path in files:
+            item = QListWidgetItem(QIcon(placeholder), path.name)
+            item.setData(NAME_ROLE, str(path))
+            item.setToolTip(path.name)
+            self.grid.addItem(item)
+        self.grid.setCurrentRow(0)
+        self.apply_filter("")
+
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        self.signals = ThumbSignals()
+        self.signals.done.connect(lambda row, img: self.grid.item(row).setIcon(centered_icon(img)))
+        pool = QThreadPool.globalInstance()
+        pool.setMaxThreadCount(4)
+        for row, path in enumerate(files):
+            pool.start(ThumbJob(row, path, self.signals))
+
+    def apply_filter(self, text):
+        words = text.lower().split()
+        shown = 0
+        first = None
+        for row in range(self.grid.count()):
+            item = self.grid.item(row)
+            hide = not all(w in item.text().lower() for w in words)
+            item.setHidden(hide)
+            if not hide:
+                shown += 1
+                first = first or item
+        current = self.grid.currentItem()
+        if current is None or current.isHidden():
+            self.grid.setCurrentItem(first)
+        if self.grid.currentItem():
+            self.grid.scrollToItem(self.grid.currentItem())
+        self.count.setText(f"{shown} of {self.grid.count()}")
+
+    def eventFilter(self, obj, event):
+        if obj is self.grid.viewport() and event.type() == QEvent.Type.Resize:
+            # Spread the columns evenly across the window instead of leaving a gap on the right
+            width = event.size().width() - 1  # Qt wraps a row that fills the width exactly
+            columns = max(1, width // CELL_MIN_WIDTH)
+            self.grid.setGridSize(QSize(width // columns, CELL_HEIGHT))
+        if obj is self.search and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key in NAV_KEYS:
+                QApplication.sendEvent(self.grid, event)
+                return True
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                item = self.grid.currentItem()
+                if item and not item.isHidden():
+                    self.pick(item)
+                return True
+            if key == Qt.Key.Key_Escape:
+                if self.search.text():
+                    self.search.clear()
+                else:
+                    self.close()
+                return True
+        return super().eventFilter(obj, event)
+
+    def pick(self, item):
+        self.picked = item.data(NAME_ROLE)
+        self.close()
+
+
+def main():
+    if len(sys.argv) != 2 or not Path(sys.argv[1]).is_dir():
+        print("Usage: wallpaper-picker-gui DIR", file=sys.stderr)
+        return 2
+    QImageReader.setAllocationLimit(0)  # big wallpapers are bigger than Qt's default 256 MB limit
+    app = QApplication(sys.argv)
+    app.setDesktopFileName("wallpaper-picker")
+    win = Picker(Path(sys.argv[1]).resolve())
+    win.show()
+    win.search.setFocus()
+    app.exec()
+    QThreadPool.globalInstance().clear()
+    QThreadPool.globalInstance().waitForDone()
+    if win.picked:
+        print(win.picked)
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -9,8 +9,8 @@ if [[ ! -d "$WALLPAPER_DIR" ]]; then
     exit 1
 fi
 
-# Open nsxiv in thumbnail mode, output selected file
-selected=$(nsxiv -t -o "$WALLPAPER_DIR" 2>/dev/null | head -1)
+# Open the thumbnail grid (with search bar), output selected file
+selected=$("$(dirname "$(readlink -f "$0")")/wallpaper-picker-gui" "$WALLPAPER_DIR")
 
 # If user selected something, apply it
 if [[ -n "$selected" ]]; then
